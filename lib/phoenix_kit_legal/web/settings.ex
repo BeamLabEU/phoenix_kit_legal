@@ -236,7 +236,10 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
          socket
          |> assign(:generated_pages, [])
          |> assign(:legal_diagnosis, Legal.diagnose_legal_pages())
-         |> put_flash(:info, gettext("Legal pages reset successfully. You can now regenerate them."))}
+         |> put_flash(
+           :info,
+           gettext("Legal pages reset successfully. You can now regenerate them.")
+         )}
 
       {:error, :no_issues_detected} ->
         {:noreply, put_flash(socket, :warning, gettext("No issues detected — reset not needed"))}

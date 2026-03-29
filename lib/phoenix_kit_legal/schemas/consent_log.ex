@@ -54,7 +54,7 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
           uuid: Ecto.UUID.t() | nil,
           user_uuid: Ecto.UUID.t() | nil,
           session_id: String.t() | nil,
-          consent_type: String.t(),
+          consent_type: String.t() | nil,
           consent_given: boolean(),
           consent_version: String.t() | nil,
           ip_address: String.t() | nil,

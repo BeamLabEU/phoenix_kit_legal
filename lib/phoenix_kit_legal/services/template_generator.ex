@@ -88,18 +88,18 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
     # Try language-specific template first (parent app, then PhoenixKit)
     # Fall back to base template (parent app, then PhoenixKit)
     if language != "en" do
-      case get_parent_template_path(lang_template_name) do
-        {:ok, path} ->
-          path
-
-        :error ->
-          case get_phoenix_kit_lang_template_path(lang_template_name) do
-            {:ok, path} -> path
-            :error -> get_base_template_path(template_name)
-          end
-      end
+      get_localized_template_path(lang_template_name, template_name)
     else
       get_base_template_path(template_name)
+    end
+  end
+
+  defp get_localized_template_path(lang_template_name, base_template_name) do
+    with :error <- get_parent_template_path(lang_template_name),
+         :error <- get_phoenix_kit_lang_template_path(lang_template_name) do
+      get_base_template_path(base_template_name)
+    else
+      {:ok, path} -> path
     end
   end
 

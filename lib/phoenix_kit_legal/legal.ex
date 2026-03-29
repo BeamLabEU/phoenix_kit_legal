@@ -780,9 +780,6 @@ defmodule PhoenixKit.Modules.Legal do
 
       {:error, :not_found} ->
         {:error, :page_not_found}
-
-      error ->
-        error
     end
   end
 
@@ -875,7 +872,7 @@ defmodule PhoenixKit.Modules.Legal do
     issues = []
 
     issues =
-      if length(trashed) > 0,
+      if trashed != [],
         do: issues ++ ["#{length(trashed)} trashed legal pages found"],
         else: issues
 
@@ -1050,40 +1047,30 @@ defmodule PhoenixKit.Modules.Legal do
         update_existing_legal_post(existing_post, page_config, full_content, language, scope)
 
       {:error, :not_found} ->
-        trashed = publishing_module().list_posts_by_status(@legal_blog_slug, "trashed")
-        trashed_match = Enum.find(trashed, fn p -> p[:slug] == page_config.slug end)
-
-        case trashed_match do
-          nil ->
-            create_new_legal_post(page_config, full_content, language, scope)
-
-          trashed_post ->
-            case publishing_module().restore_post(@legal_blog_slug, trashed_post[:uuid]) do
-              {:ok, _} ->
-                case publishing_module().read_post(@legal_blog_slug, page_config.slug) do
-                  {:ok, restored_post} ->
-                    update_existing_legal_post(
-                      restored_post,
-                      page_config,
-                      full_content,
-                      language,
-                      scope
-                    )
-
-                  error ->
-                    error
-                end
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-        end
-
-      error ->
-        error
+        create_or_restore_legal_post(page_config, full_content, language, scope)
     end
   rescue
     e -> {:error, e}
+  end
+
+  defp create_or_restore_legal_post(page_config, full_content, language, scope) do
+    trashed = publishing_module().list_posts_by_status(@legal_blog_slug, "trashed")
+    trashed_match = Enum.find(trashed, fn p -> p[:slug] == page_config.slug end)
+
+    case trashed_match do
+      nil ->
+        create_new_legal_post(page_config, full_content, language, scope)
+
+      trashed_post ->
+        restore_and_update_legal_post(trashed_post, page_config, full_content, language, scope)
+    end
+  end
+
+  defp restore_and_update_legal_post(trashed_post, page_config, full_content, language, scope) do
+    with {:ok, _} <- publishing_module().restore_post(@legal_blog_slug, trashed_post[:uuid]),
+         {:ok, restored_post} <- publishing_module().read_post(@legal_blog_slug, page_config.slug) do
+      update_existing_legal_post(restored_post, page_config, full_content, language, scope)
+    end
   end
 
   # Handles updating a legal post that already exists.
@@ -1149,45 +1136,43 @@ defmodule PhoenixKit.Modules.Legal do
   # Handles creating a new legal post from scratch.
   # If the requested language is not the primary language, adds the language slot after creation.
   defp create_new_legal_post(page_config, full_content, language, scope) do
-    case publishing_module().create_post(@legal_blog_slug, %{
-           title: page_config.title,
-           slug: page_config.slug,
-           scope: scope
-         }) do
-      {:ok, post} ->
-        primary_language = publishing_module().get_primary_language()
+    with {:ok, post} <-
+           publishing_module().create_post(@legal_blog_slug, %{
+             title: page_config.title,
+             slug: page_config.slug,
+             scope: scope
+           }) do
+      set_language_and_update_post(post, page_config, full_content, language, scope)
+    end
+  end
 
-        if language != primary_language do
-          # Use case instead of = to avoid MatchError when Publishing's read_back_post
-          # returns {:error, :not_found} (bug: tries to look up UUID as a slug)
-          case publishing_module().add_language_to_post(
-                 @legal_blog_slug,
-                 post[:uuid],
-                 language,
-                 post[:version] || 1
-               ) do
-            {:ok, lang_post} ->
-              publishing_module().update_post(
-                @legal_blog_slug,
-                lang_post,
-                %{"content" => full_content, "title" => page_config.title, "status" => "draft"},
-                scope: scope
-              )
+  defp set_language_and_update_post(post, page_config, full_content, language, scope) do
+    primary_language = publishing_module().get_primary_language()
 
-            error ->
-              error
-          end
-        else
-          publishing_module().update_post(
-            @legal_blog_slug,
-            post,
-            %{"content" => full_content, "status" => "draft"},
-            scope: scope
-          )
-        end
-
-      error ->
-        error
+    if language != primary_language do
+      # Use with instead of = to avoid MatchError when Publishing's read_back_post
+      # returns {:error, :not_found} (bug: tries to look up UUID as a slug)
+      with {:ok, lang_post} <-
+             publishing_module().add_language_to_post(
+               @legal_blog_slug,
+               post[:uuid],
+               language,
+               post[:version] || 1
+             ) do
+        publishing_module().update_post(
+          @legal_blog_slug,
+          lang_post,
+          %{"content" => full_content, "title" => page_config.title, "status" => "draft"},
+          scope: scope
+        )
+      end
+    else
+      publishing_module().update_post(
+        @legal_blog_slug,
+        post,
+        %{"content" => full_content, "status" => "draft"},
+        scope: scope
+      )
     end
   end
 

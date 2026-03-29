@@ -40,13 +40,15 @@ defmodule PhoenixKit.Modules.Legal.LegalFramework do
   @spec from_map(map()) :: t()
   def from_map(map) when is_map(map) do
     %__MODULE__{
-      id: map[:id] || map["id"],
-      name: map[:name] || map["name"],
-      description: map[:description] || map["description"],
-      regions: map[:regions] || map["regions"] || [],
-      consent_model: map[:consent_model] || map["consent_model"] || :notice,
-      required_pages: map[:required_pages] || map["required_pages"] || [],
-      optional_pages: map[:optional_pages] || map["optional_pages"] || []
+      id: get_field(map, :id),
+      name: get_field(map, :name),
+      description: get_field(map, :description),
+      regions: get_field(map, :regions) || [],
+      consent_model: get_field(map, :consent_model) || :notice,
+      required_pages: get_field(map, :required_pages) || [],
+      optional_pages: get_field(map, :optional_pages) || []
     }
   end
+
+  defp get_field(map, key), do: map[key] || map[Atom.to_string(key)]
 end
