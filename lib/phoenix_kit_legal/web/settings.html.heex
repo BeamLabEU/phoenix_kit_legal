@@ -332,17 +332,18 @@
               </div>
               <div class="flex items-center gap-2">
                 <%= if length(@enabled_languages) > 1 do %>
-                  <select
-                    class="select select-sm"
-                    phx-change="select_generation_language"
-                    name="language"
-                  >
-                    <%= for lang <- @enabled_languages do %>
-                      <option value={lang} selected={lang == @selected_generation_language}>
-                        {String.upcase(lang)}
-                      </option>
-                    <% end %>
-                  </select>
+                  <label class="select select-sm">
+                    <select
+                      phx-change="select_generation_language"
+                      name="language"
+                    >
+                      <%= for lang <- @enabled_languages do %>
+                        <option value={lang} selected={lang == @selected_generation_language}>
+                          {String.upcase(lang)}
+                        </option>
+                      <% end %>
+                    </select>
+                  </label>
                 <% end %>
                 <button
                   phx-click="generate_all_pages"
