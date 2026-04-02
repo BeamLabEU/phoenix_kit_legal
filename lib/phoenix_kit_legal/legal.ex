@@ -725,7 +725,7 @@ defmodule PhoenixKit.Modules.Legal do
   end
 
   @impl PhoenixKit.Module
-  def css_sources, do: [:phoenix_kit_legal]
+  def css_sources, do: ["phoenix_kit_legal"]
 
   # ===================================
   # PAGE GENERATION
