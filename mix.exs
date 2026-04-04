@@ -11,6 +11,7 @@ defmodule PhoenixKitLegal.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      elixirc_options: [ignore_module_conflict: true],
       deps: deps(),
       aliases: aliases(),
 
