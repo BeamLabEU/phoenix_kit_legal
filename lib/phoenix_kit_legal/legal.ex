@@ -786,16 +786,25 @@ defmodule PhoenixKit.Modules.Legal do
   @impl PhoenixKit.Module
   def migration_module, do: PhoenixKit.Modules.Legal.Migrations.ConsentLogs
 
-  # Legal owns the top-level "/legal" route (its host-app LiveView reads
-  # generated pages via this module). It also creates a Publishing group
-  # slugged @legal_blog_slug ("legal") to store those pages, which — absent
-  # this reservation — Publishing's `/:language/:group/*path` catch-all
-  # dispatch would treat as one of its own groups and claim the request
-  # before the host's own "/legal" route ever matches, rendering Publishing's
-  # generic post view (wrong canonical/og/hreflang) instead of the host's
-  # LiveView. See `PhoenixKit.Module.reserved_route_prefixes/0`.
-  @impl PhoenixKit.Module
-  def reserved_route_prefixes, do: [@legal_blog_slug]
+  # NOTE: Legal deliberately does NOT implement
+  # `PhoenixKit.Module.reserved_route_prefixes/0`.
+  #
+  # Generated pages are stored as Publishing posts in the group slugged
+  # @legal_blog_slug ("legal"), and Publishing's `/:language/:group/*path`
+  # catch-all serves them directly at `/legal` and `/legal/:slug` — with
+  # language prefixes, translations, and in-place editing handled by
+  # Publishing like any other group. That is the intended division of
+  # labour: Legal generates content, Publishing renders it.
+  #
+  # 0.1.6 briefly reserved "legal" here so a host-app LiveView could own
+  # the route instead. The motivation was an SEO defect — publishing-served
+  # pages canonicalized to "/" because the public controller never assigned
+  # `:url_path`, and Google dropped them as duplicates. That defect was
+  # fixed at its source in phoenix_kit_publishing 0.2.3 (the `assign_url_path`
+  # plug in `Web.Controller`), which shipped the same day. The reservation
+  # then only removed `/legal` from Publishing's dispatch while nothing
+  # replaced it — no LiveView ships with this module — so every host app
+  # that hadn't hand-written one started 404ing. Reverted in 0.1.7.
 
   # ===================================
   # PAGE GENERATION

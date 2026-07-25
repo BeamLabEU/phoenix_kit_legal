@@ -51,8 +51,39 @@ This is a **library** (not a standalone Phoenix app) that provides legal complia
 3. `settings_tabs/0` callback registers the admin settings page
 4. Settings are persisted via `PhoenixKit.Settings` API (DB-backed in parent app)
 5. Legal pages are generated from EEx templates and stored via the Publishing module as posts
-6. Cookie consent widget is injected client-side via `phoenix_kit_consent.js`
-7. Consent decisions are logged to `phoenix_kit_consent_logs` for GDPR audit compliance
+6. **Publishing serves those pages publicly** at `/legal` and `/legal/:slug` — see "Public Route Contract" below
+7. Cookie consent widget is injected client-side via `phoenix_kit_consent.js`
+8. Consent decisions are logged to `phoenix_kit_consent_logs` for GDPR audit compliance
+
+### Public Route Contract
+
+**This module renders no public pages.** It generates content into the Publishing
+group slugged `"legal"` (`@legal_blog_slug`, `legal.ex:63`); Publishing's
+`/:language/:group/*path` catch-all dispatch serves it at `/legal` (index) and
+`/legal/:slug`. The host app needs no route — the only router scope in the README
+is for the admin settings LiveView.
+
+Division of labour: **Legal generates content, Publishing renders it.** Legal has
+no public LiveView, controller, or template, and adding one would duplicate a
+rendering path Publishing already owns (languages, translations, canonical/`og:*`/
+hreflang, editing, version dropdown).
+
+**Do not implement `reserved_route_prefixes/0` in this module.** 0.1.6 did — it
+returned `["legal"]` to hand the route to a host-app LiveView that this module
+never shipped and never generated, so public legal pages 404'd on every host that
+hadn't hand-written one. Reverted in 0.1.7; `test/phoenix_kit_legal/reserved_route_prefixes_test.exs`
+guards against reintroducing it. The SEO defect that motivated it (pages
+canonicalizing to `"/"`) was fixed at its source by the `assign_url_path` plug in
+`phoenix_kit_publishing` 0.2.3.
+
+Consequences to keep in mind when changing page-generation code:
+
+- A page is only publicly reachable once its status is `"published"` — Publishing
+  404s drafts for anonymous visitors (`web/controller/post_rendering.ex:60`)
+- `get_published_legal_links/0` (`legal.ex:658`) hardcodes the `/legal/{slug}` URL
+  shape; it must stay in sync with Publishing's dispatch, and the cookie consent
+  widget shows those links to every visitor
+- Renaming `@legal_blog_slug` changes public URLs and breaks existing inbound links
 
 ### Compliance Frameworks (7 total)
 

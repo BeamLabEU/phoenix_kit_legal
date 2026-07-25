@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.1.6"
+  @version "0.1.7"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
@@ -57,12 +57,9 @@ defmodule PhoenixKitLegal.MixProject do
   defp deps do
     [
       # PhoenixKit provides the Module behaviour, Settings API, and core infrastructure.
-      # 1.7.170 introduces PhoenixKit.Module.reserved_route_prefixes/0, which
-      # this module implements (@impl PhoenixKit.Module) — an older core
-      # doesn't declare that callback in the behaviour, so this floor isn't
-      # optional: `@impl` on an undeclared callback is a compile error, not a
-      # graceful no-op. 1.7.184 adds `disabled`/`wrapper_class`/`title`/
-      # `:description` to `PhoenixKitWeb.Components.Core.Checkbox`, used here.
+      # 1.7.184 adds `disabled`/`wrapper_class`/`title`/`:description` to
+      # `PhoenixKitWeb.Components.Core.Checkbox`, used here. 1.7.189 adds the
+      # runtime schema-prefix support `PhoenixKit.SchemaPrefix` relies on.
       {:phoenix_kit, "~> 1.7.189"},
 
       # Publishing module for storing generated legal pages as posts.

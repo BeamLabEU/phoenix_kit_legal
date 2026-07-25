@@ -114,6 +114,58 @@ PhoenixKit auto-discovers the module at startup — no additional configuration 
 4. Select compliance frameworks (e.g., GDPR, CCPA)
 5. Fill in company and DPO contact information
 6. Generate legal pages — they appear under `/admin/settings/legal`
+7. Publish them — they go live at `/legal/:slug` with no routing work
+
+## Public Legal Pages
+
+**No router changes are needed to serve public legal pages.** The router scope in
+[Installation](#installation) is for the *admin settings* screen only.
+
+Legal doesn't render public pages itself. It generates them into a
+`phoenix_kit_publishing` group slugged `"legal"`, and Publishing's
+`/:language/:group/*path` dispatch serves them like any other group:
+
+| URL | What renders |
+|-----|--------------|
+| `/legal` | Index of every published legal page |
+| `/legal/privacy-policy` | That page |
+| `/en/legal/privacy-policy` | Same page, explicit locale prefix |
+
+The division of labour is deliberate — **Legal generates content, Publishing
+renders it.** That means legal pages inherit everything Publishing already does:
+per-language versions, translation, in-place editing from the admin post editor,
+canonical / `og:*` / hreflang tags, and the language switcher. There's no second
+rendering path to keep in sync.
+
+Pages are only reachable once **published** — a generated page sits in `draft`
+until you publish it, and drafts 404 for anonymous visitors. Check status under
+`/admin/settings/legal`, or call `Legal.all_required_pages_published?/0`.
+
+### Linking to legal pages
+
+`get_published_legal_links/0` returns published pages as `%{title:, url:}` maps,
+which is what the cookie consent widget uses to build its links:
+
+```elixir
+PhoenixKit.Modules.Legal.get_published_legal_links()
+#=> [%{title: "Privacy Policy", url: "/legal/privacy-policy"},
+#    %{title: "Cookie Policy", url: "/legal/cookie-policy"}]
+```
+
+URLs are emitted without a locale prefix so the host app's locale plug resolves
+the visitor's current language on click.
+
+### If you want a custom `/legal` page
+
+Declaring a host route at `/legal` is **not** supported — Publishing's dispatch
+runs in the router's `call/2` override, so it claims the path before your route
+is matched. To customize, either edit the generated posts in the Publishing
+editor, or override the EEx templates (see
+[Template Customization](#template-customization)).
+
+> **Upgrading from 0.1.6?** That release reserved `/legal` for a host-app
+> LiveView that this module never shipped, which 404'd public legal pages. 0.1.7
+> reverts it. If you added a `/legal` route to work around it, remove it.
 
 ## Compliance Frameworks
 
