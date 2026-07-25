@@ -49,7 +49,7 @@
 
 ### Changed
 - Bumped `phoenix_kit` dependency floor to `~> 1.7.170` — the version that
-  introduces `PhoenixKit.Module.reserved_route_prefixes/0`, which this module now
+  introduces `c:PhoenixKit.Module.reserved_route_prefixes/0`, which this module now
   implements under `@impl`.
 
 ## 0.1.5 (2026-05-22)
