@@ -35,6 +35,35 @@
   to diagnose: the only written trace of the routing rule was a source comment
   in `phoenix_kit_publishing`'s `router_dispatch.ex`.
 
+### Upgrade notes
+
+```bash
+mix deps.update phoenix_kit_legal phoenix_kit_publishing
+mix phoenix_kit.update      # apply any pending schema migrations
+# restart the app
+```
+
+Requires `phoenix_kit ~> 1.7.189` (both modules), and
+`phoenix_kit_publishing ~> 0.4.4` for the matching README documentation. Verify
+with `curl -I https://yoursite/legal` — expect `200`, not `404`.
+
+**If it still 404s**, two causes, in order of likelihood:
+
+1. **Pages are still drafts.** Upgrading publishes nothing. Publishing 404s
+   unpublished posts for anonymous visitors, so a page generated but never
+   published stays invisible. Publish from `/admin/settings/legal`, or check
+   `Legal.all_required_pages_published?/0`.
+2. **A leftover `/legal` route from the 0.1.6 workaround.** Delete it — Publishing's
+   dispatch rewrites the path in the router's `call/2` before route matching, so
+   the route is unreachable regardless of its position in `router.ex`.
+
+**Not required:** no new migration (the `phoenix_kit_consent_logs` schema is
+unchanged — `mix phoenix_kit.update` is listed only because it's idempotent and
+catches pending core migrations), no cache clearing (group-slug resolution is a
+live per-request DB lookup and reserved prefixes are recomputed per call), and no
+config, settings, or router changes. Run `mix phoenix_kit.assets.rebuild` only if
+the consent widget renders unstyled.
+
 ## 0.1.6 (2026-07-03)
 
 ### Added

@@ -163,9 +163,51 @@ is matched. To customize, either edit the generated posts in the Publishing
 editor, or override the EEx templates (see
 [Template Customization](#template-customization)).
 
-> **Upgrading from 0.1.6?** That release reserved `/legal` for a host-app
-> LiveView that this module never shipped, which 404'd public legal pages. 0.1.7
-> reverts it. If you added a `/legal` route to work around it, remove it.
+> **Upgrading from 0.1.6?** That release reserved `/legal` for a host-app LiveView
+> this module never shipped, which 404'd public legal pages. 0.1.7 reverts it —
+> see [Upgrading](#upgrading).
+
+## Upgrading
+
+```bash
+mix deps.update phoenix_kit_legal phoenix_kit_publishing
+mix phoenix_kit.update      # apply any pending schema migrations
+# restart the app
+```
+
+Both modules require `phoenix_kit ~> 1.7.189`, so an older pin is carried forward
+by the same command.
+
+Then verify:
+
+```bash
+curl -I https://yoursite/legal                  # expect 200
+curl -I https://yoursite/legal/privacy-policy   # expect 200
+```
+
+### Still 404 after upgrading?
+
+Two causes, in order of likelihood:
+
+1. **Pages are still drafts.** Upgrading publishes nothing. A generated page sits
+   in `draft`, and Publishing 404s unpublished posts for anonymous visitors. Open
+   `/admin/settings/legal` and publish them, or check
+   `Legal.all_required_pages_published?/0`.
+2. **A leftover `/legal` route from the 0.1.6 workaround.** Delete it. Publishing's
+   dispatch rewrites the path in the router's `call/2` before route matching, so
+   such a route is unreachable no matter where it sits in `router.ex`.
+
+### What you don't need to do
+
+- **No new migration** is introduced by 0.1.7. The `phoenix_kit_consent_logs`
+  schema is unchanged. `mix phoenix_kit.update` is still worth running — it's
+  idempotent and picks up core migrations if you're several versions behind.
+- **No cache to clear.** Publishing resolves group slugs with a live DB lookup per
+  request and recomputes reserved prefixes per call; a normal restart is enough.
+- **No config or settings changes**, and no router changes.
+
+If the consent widget renders unstyled, your Tailwind build didn't pick up the
+module's CSS sources — run `mix phoenix_kit.assets.rebuild`.
 
 ## Compliance Frameworks
 
