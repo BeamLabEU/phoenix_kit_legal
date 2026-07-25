@@ -163,3 +163,97 @@ is dead code.
 - **A cross-package contract that lives only in a source comment will be missed.**
   The one artifact that described this behaviour was a comment in a *different*
   package, which is why diagnosis started from a user report rather than a doc.
+
+---
+
+## Independent recheck (Grok, 2026-07-25)
+
+**Verdict: diagnosis and code fix confirmed correct.** No logic defects found in
+the 0.1.7 change. Remaining work is release packaging (tag / GitHub release / Hex),
+not further code changes.
+
+### What was rechecked
+
+Against commit `464f1e4` on `main` (branch clean, matching `origin/main`), with
+vendored deps `phoenix_kit` 1.7.189 and `phoenix_kit_publishing` 0.3.0:
+
+1. **Root cause path** — `RouterDispatch.known_group?/1` calls
+   `reserved_by_other_module?/1`, which consults
+   `ModuleRegistry.all_reserved_route_prefixes/0`. With Legal returning
+   `["legal"]`, a real `"legal"` Publishing group is never treated as a known
+   group, so `maybe_rewrite/2` returns `:pass` and nothing serves the URL.
+2. **Missing renderer** — `LegalLive` does not exist in this package or in
+   publishing. `mix phoenix_kit_legal.install` only wires Plug.Static, CSS
+   `@source`, and consent JS; it never scaffolds a public `/legal` LiveView or
+   route. PR #9's own review doc and commit message assumed a host `LegalLive`
+   that was never shipped.
+3. **Fix implementation** — `reserved_route_prefixes/0` is no longer implemented
+   in `legal.ex`. Runtime confirms
+   `PhoenixKit.Modules.Legal.reserved_route_prefixes() == []` and
+   `PhoenixKitLegal.version() == "0.1.7"`. The `use PhoenixKit.Module` default
+   (`module.ex:472`) supplies the empty list; Publishing stops treating
+   `"legal"` as reserved and resumes group dispatch.
+4. **SEO source fix still present** — `assign_url_path` plug is in publishing
+   `Web.Controller` (0.2.3+; present in locked 0.3.0). The reservation's
+   original motivation remains fixed at source.
+5. **Dispatch shapes** — both branches of `maybe_rewrite/2` are present:
+   localized `/:language/:group/*` and root `/:group/*`. Draft gate at
+   `post_rendering.ex:60` (`status == "published"` else `{:error, :unpublished}`)
+   matches the README claim.
+6. **Publishing docs** — README sections "How Dispatch Works" and "Reserved
+   Route Prefixes" are on publishing `main` (commit `668b594`, same day). They
+   document the `call/2` rewrite, the reservation 404 footgun, and cite this
+   legal incident. Documentation only; no publishing code change needed.
+7. **Regression guard** — `test/phoenix_kit_legal/reserved_route_prefixes_test.exs`
+   pins `[]` with a clear outage narrative in the moduledoc.
+
+### Gates re-run
+
+| Check | Result |
+|-------|--------|
+| `mix test` | 38 tests, 0 failures |
+| `mix compile --warnings-as-errors` | clean |
+| `mix quality.ci` (format check + credo --strict + dialyzer) | clean, 0 issues |
+
+### Report / docs nits (non-blocking)
+
+- Line reference `phoenix_kit/lib/phoenix_kit/module.ex:471` in the body above is
+  off by one; the injected default is at **472**. The controller quote for
+  `assign_url_path` is a couple of lines off from the current source; the
+  quoted text itself is accurate.
+- Publishing's *source* comment in `router_dispatch.ex` (~224–232) still says
+  phoenix_kit_legal reserves `"legal"`. Only the publishing README was updated
+  (as this report already states). Stale comment only — behaviour follows the
+  registry, not the comment.
+- Historical `CHANGELOG.md` 0.1.6 entry correctly still describes the reservation;
+  0.1.7 documents the revert. No conflict.
+
+### Release gap (blocks host recovery)
+
+The code fix is on `main` but **not yet consumable by host apps via Hex**:
+
+| Step | Status at recheck time |
+|------|------------------------|
+| Commit + push to `main` | Done (`464f1e4`) |
+| Git tag `0.1.7` | **Missing** (latest tag `0.1.6`) |
+| GitHub release | **Missing** |
+| Hex publish | **Still 0.1.6 only** (`mix hex.info phoenix_kit_legal`) |
+
+Until tag + Hex publish, `mix deps.update phoenix_kit_legal` cannot pull ≥ 0.1.7,
+so production hosts on 0.1.6 remain 404. The "Host app action required" section
+above is correct *after* that release lands.
+
+### Still not verified end-to-end
+
+No live host was exercised with 0.1.7 installed. Recommended smoke after Hex
+publish: enable Legal, publish at least one page, `curl -I /legal` and
+`curl -I /legal/privacy-policy` expect 200 (or 302 into locale), not 404.
+
+### Confirmation summary
+
+- **Problem statement:** correct.
+- **Causal chain** (SEO defect → reservation → no renderer → 404): correct.
+- **Chosen fix** (drop reservation; Publishing serves the group again): correct
+  and minimal; matches the module's original design.
+- **Docs and regression test:** adequate to prevent silent reintroduction.
+- **Outstanding:** ship 0.1.7 (tag, GitHub release, Hex), then smoke a host app.
