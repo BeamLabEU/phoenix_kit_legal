@@ -46,6 +46,7 @@ defmodule PhoenixKit.Modules.Legal do
               {PhoenixKit.Modules.Publishing, :read_post, 4},
               {PhoenixKit.Modules.Publishing, :create_post, 2},
               {PhoenixKit.Modules.Publishing, :update_post, 4},
+              {PhoenixKit.Modules.Publishing, :publish_version, 4},
               {PhoenixKit.Modules.Publishing, :add_language_to_post, 4},
               {PhoenixKit.Modules.Publishing, :restore_post, 2},
               {PhoenixKit.Modules.Publishing, :remove_group, 2}
@@ -839,13 +840,21 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Publish a legal page by slug.
 
+  Publishing a page is what makes it publicly reachable: Publishing serves only
+  posts with an `active_version_uuid`, so a generated-but-unpublished page 404s
+  at `/legal/:slug` even though it exists and is visible in the admin.
+
   ## Parameters
   - page_slug: The slug of the page to publish (e.g., "cookie-policy")
   - opts: Keyword options
-    - :scope - User scope for audit trail
+    - :scope - User scope for the audit trail
+    - :version - Version number to publish (defaults to the post's current
+      version, which is what a freshly generated or regenerated page has)
 
   ## Returns
-  - `{:ok, post}` on success
+  - `{:ok, post}` on success — the post re-read after publishing, so its
+    `metadata.status` reflects the new state
+  - `{:error, :page_not_found}` when no page exists for the slug
   - `{:error, reason}` on failure
   """
   @spec publish_page(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
@@ -854,17 +863,35 @@ defmodule PhoenixKit.Modules.Legal do
 
     case publishing_module().read_post(@legal_blog_slug, page_slug) do
       {:ok, post} ->
-        publishing_module().update_post(
-          @legal_blog_slug,
-          post,
-          %{"status" => "published"},
-          scope: scope
-        )
+        # Publishing refuses to write status="published" through update_post/4:
+        # `deferred_publish_status/1` drops the value, because status and
+        # `active_version_uuid` must be set in a single transaction or a
+        # rolled-back publish leaves a post reading "published" with no active
+        # version. `publish_version/4` IS that transaction.
+        #
+        # Going through update_post/4 therefore returned {:ok, post} while
+        # changing nothing — the version stayed "draft", `active_version_uuid`
+        # stayed NULL, and the public URL 404'd, including from the admin
+        # "Publish" button. Silent because update_post/4 still succeeds (#11).
+        version = Keyword.get(opts, :version) || post[:version] || 1
+
+        case publishing_module().publish_version(@legal_blog_slug, post.uuid, version,
+               actor_uuid: actor_uuid(scope)
+             ) do
+          :ok -> publishing_module().read_post(@legal_blog_slug, page_slug)
+          {:error, reason} -> {:error, reason}
+        end
 
       {:error, :not_found} ->
         {:error, :page_not_found}
     end
   end
+
+  # `publish_version/4` audits by `:actor_uuid`; it does not read the `:scope`
+  # that `update_post/4` accepts, so a scope passed straight through would be
+  # silently dropped from the audit trail.
+  defp actor_uuid(nil), do: nil
+  defp actor_uuid(scope), do: get_in(scope, [Access.key(:user), Access.key(:uuid)])
 
   @doc """
   Generate all required pages for selected frameworks.

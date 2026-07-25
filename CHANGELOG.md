@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.1.9 (2026-07-25)
+
+### Fixed
+- **`publish_page/2` silently did nothing — pages stayed drafts and kept 404ing,
+  including via the admin "Publish" button.** ([#11](https://github.com/BeamLabEU/phoenix_kit_legal/issues/11),
+  reported by @timujinne)
+
+  It published by calling `Publishing.update_post/4` with
+  `%{"status" => "published"}`. Publishing deliberately refuses that write —
+  `deferred_publish_status/1` drops a `"published"` value, because the status and
+  `active_version_uuid` must be set in one transaction; splitting them let a save
+  commit `status=published` while the paired publish rolled back, leaving a post
+  that reads published with no active version. `Versions.publish_version/4` is
+  that transaction, and `publish_page/2` never called it.
+
+  So the version stayed `draft`, `active_version_uuid` stayed `NULL`, and
+  Publishing's public dispatch — which serves only posts with an active version —
+  returned 404. `update_post/4` still succeeded, so `publish_page/2` returned
+  `{:ok, post}` and the admin flashed "Page published successfully". Nothing
+  surfaced the failure.
+
+  `publish_page/2` now calls `publish_version/4` on the post's current version,
+  matching how Publishing's own admin publishes (`Web.Listing.apply_status_change/4`).
+
+  **This was the remaining reason `/legal/:slug` 404'd after the 0.1.7 routing
+  fix.** The two are independent: 0.1.7 restored the route, and a page still had
+  to be genuinely published to be served. Anyone who published via the admin
+  button or `publish_page/2` had pages that were never published at all.
+
+### Added
+- `publish_page/2` accepts a `:version` option to publish a specific version;
+  it defaults to the post's current version.
+
+### Changed
+- `publish_page/2` re-reads the post after publishing, so the returned
+  `{:ok, post}` carries the post-publish state rather than the pre-publish one.
+  The return contract is unchanged.
+- The audit trail now records the acting user. `publish_version/4` audits by
+  `:actor_uuid` and ignores the `:scope` that `update_post/4` accepts, so the
+  scope callers pass is resolved to a user uuid rather than dropped.
+
 ## 0.1.8 (2026-07-25)
 
 Documentation and packaging follow-up to 0.1.7. No behaviour changes — the

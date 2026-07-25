@@ -193,6 +193,12 @@ Two causes, in order of likelihood:
    in `draft`, and Publishing 404s unpublished posts for anonymous visitors. Open
    `/admin/settings/legal` and publish them, or check
    `Legal.all_required_pages_published?/0`.
+
+   > **On 0.1.8 or earlier, publishing itself was broken.** `publish_page/2` —
+   > and the admin "Publish" button that calls it — reported success while
+   > leaving the page a draft ([#11](https://github.com/BeamLabEU/phoenix_kit_legal/issues/11)).
+   > If a page reads as published but still 404s, upgrade to **0.1.9+** and
+   > publish it again.
 2. **A leftover `/legal` route from the 0.1.6 workaround.** Delete it. Publishing's
    dispatch rewrites the path in the router's `call/2` before route matching, so
    such a route is unreachable no matter where it sits in `router.ex`.
