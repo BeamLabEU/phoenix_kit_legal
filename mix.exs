@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.1.7"
+  @version "0.1.8"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
@@ -92,7 +92,10 @@ defmodule PhoenixKitLegal.MixProject do
   defp docs do
     [
       main: "readme",
-      source_ref: "v#{@version}",
+      # Tags in this repo are bare version numbers (`0.1.8`), not `v`-prefixed —
+      # see AGENTS.md. A "v#{@version}" ref points at a tag that has never
+      # existed, which 404s every "Source" link on HexDocs.
+      source_ref: @version,
       source_url: @source_url,
       extras: ["README.md", "CHANGELOG.md", "LICENSE.md"]
     ]

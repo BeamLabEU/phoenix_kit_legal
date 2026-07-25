@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.8 (2026-07-25)
+
+Documentation and packaging follow-up to 0.1.7. No behaviour changes — the
+`/legal` routing fix itself shipped in 0.1.7 and is unchanged here.
+
+### Fixed
+- **HexDocs "Source" links 404'd on every release.** `docs.source_ref` was
+  `"v#{@version}"`, but this repo's tags are bare version numbers (`0.1.7`, not
+  `v0.1.7`) as documented in `AGENTS.md` — so every source link pointed at a tag
+  that has never existed. Now `@version`.
+- ExDoc reference to `c:PhoenixKit.Module.reserved_route_prefixes/0` in the 0.1.6
+  entry below was written as a function; it is a `@callback`, which ExDoc resolves
+  only via the `c:` prefix. `mix docs` is now warning-free.
+
+### Added
+- **Upgrade guide** — new "Upgrading" section in `README.md` and "Upgrade notes"
+  under 0.1.7 below: the commands to run, how to verify, the two reasons a page
+  can still 404 afterwards (pages left in `draft`, or a leftover `/legal` route
+  from the 0.1.6 workaround), and what is deliberately *not* required (no new
+  migration, no cache clearing, no config or router changes).
+
 ## 0.1.7 (2026-07-25)
 
 ### Fixed
