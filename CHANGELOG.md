@@ -40,6 +40,16 @@
 - The audit trail now records the acting user. `publish_version/4` audits by
   `:actor_uuid` and ignores the `:scope` that `update_post/4` accepts, so the
   scope callers pass is resolved to a user uuid rather than dropped.
+- **Admin settings read the correct scope assign.** `Web.Settings` passed
+  `scope: socket.assigns[:current_scope]` for all three actions (generate,
+  publish, generate all), but PhoenixKit mounts the scope as
+  `:phoenix_kit_current_scope` (`PhoenixKitWeb.Users.Auth`), so the value was
+  always `nil` and every admin action logged a `nil` actor. Pre-existing, and it
+  would have made the audit-trail improvement above a no-op for the admin UI —
+  the only place most people publish from. Found in independent review of this
+  release.
+- Corrected the stale `phoenix_kit ~> 1.7.170` dependency note in
+  `PhoenixKitLegal`'s moduledoc; `mix.exs` has required `~> 1.7.189` since 0.1.6.
 
 ## 0.1.8 (2026-07-25)
 

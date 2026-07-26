@@ -160,7 +160,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
     case Legal.generate_page(page_type,
            language: language,
-           scope: socket.assigns[:current_scope]
+           scope: socket.assigns[:phoenix_kit_current_scope]
          ) do
       {:ok, _post} ->
         {:noreply,
@@ -183,7 +183,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
   @impl true
   def handle_event("publish_page", %{"page_slug" => page_slug}, socket) do
-    case Legal.publish_page(page_slug, scope: socket.assigns[:current_scope]) do
+    case Legal.publish_page(page_slug, scope: socket.assigns[:phoenix_kit_current_scope]) do
       {:ok, _post} ->
         {:noreply,
          socket
@@ -207,7 +207,10 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     socket = assign(socket, :generating, true)
 
     {:ok, results} =
-      Legal.generate_all_pages(language: language, scope: socket.assigns[:current_scope])
+      Legal.generate_all_pages(
+        language: language,
+        scope: socket.assigns[:phoenix_kit_current_scope]
+      )
 
     success_count =
       results

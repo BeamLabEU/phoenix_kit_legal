@@ -14,8 +14,8 @@ defmodule PhoenixKitLegal do
 
   ## Dependencies
 
-  - `phoenix_kit` ~> 1.7.170
-  - `phoenix_kit_publishing` (for page generation)
+  - `phoenix_kit` ~> 1.7.189
+  - `phoenix_kit_publishing` (for page generation and public page rendering)
   """
 
   @version Mix.Project.config()[:version]
