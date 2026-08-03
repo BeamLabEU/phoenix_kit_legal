@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.1.10 (2026-08-03)
+
+### Removed
+- **`PhoenixKitWeb.Controllers.ConsentConfigController` — core owns the
+  consent-config endpoint now.** ([#12](https://github.com/BeamLabEU/phoenix_kit_legal/pull/12),
+  by @mdon; pairs with [phoenix_kit#677](https://github.com/BeamLabEU/phoenix_kit/pull/677))
+
+  `GET /phoenix_kit/api/consent-config` was always routed by core, not by this
+  package — core declared the route and picked the controller's module name, and
+  this package supplied a module to match it. That only worked while core declared
+  the route *conditionally* on this package being loaded: an install without it
+  answered `Phoenix.Router.NoRouteError`, because the vendored JS bundle asks for
+  the endpoint whether or not Legal is installed.
+
+  Core now declares the route unconditionally and answers it itself, with 204 when
+  this package is absent and the usual JSON — delegated to
+  `Legal.get_consent_widget_config/0` — when it is present. Nothing here referenced
+  the controller, and the endpoint's behaviour with Legal installed is unchanged.
+
+### Changed
+- **`{:phoenix_kit, "~> 1.7.189"}` → `{:phoenix_kit, "~> 1.7.227"}`.** This is a
+  hard requirement of the removal above, not a routine bump. Core declares the
+  consent-config route whenever `PhoenixKit.Modules.Legal` is loaded, and before
+  1.7.227 that route points at the controller this package used to define. On an
+  older core the route would resolve to a module that exists nowhere and raise
+  `UndefinedFunctionError` — a logged 500 on every page load where the widget was
+  not server-rendered, which includes authenticated users
+  (`legal_hide_for_authenticated` defaults to `true`). Phoenix compiles routes to
+  literal tuples, so nothing would have warned at compile time.
+
+  **Upgrading from 0.1.9 or earlier requires `phoenix_kit` 1.7.227+.** The reverse
+  order is safe: core 1.7.227 with legal ≤ 0.1.9 simply leaves this package's old
+  controller unused, since core's is deliberately named
+  `PhoenixKitWeb.Controllers.ConsentConfig` rather than reusing the published name.
+
+### Documentation
+- README and AGENTS.md no longer list the deleted controller, and the "API Endpoint"
+  section now says who owns the route. Its cache header was documented as "cached
+  publicly for 60 seconds" — stale since it became `private, max-age=60`, which is
+  deliberate: the payload embeds locale-dependent translations, so it is cacheable
+  per user but must never be shared.
+- AGENTS.md gains a "Consent Config Endpoint Contract" section recording the
+  ownership split and the release-ordering rule, next to the existing
+  `reserved_route_prefixes/0` note.
+
 ## 0.1.9 (2026-07-25)
 
 ### Fixed

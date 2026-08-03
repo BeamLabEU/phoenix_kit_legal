@@ -175,8 +175,11 @@ mix phoenix_kit.update      # apply any pending schema migrations
 # restart the app
 ```
 
-Both modules require `phoenix_kit ~> 1.7.189`, so an older pin is carried forward
-by the same command.
+**From 0.1.10 this package requires `phoenix_kit ~> 1.7.227`** (up from `~> 1.7.189`),
+because core took over the `/api/consent-config` endpoint — see
+[API Endpoint](#api-endpoint). The command above pulls core up with it. If your app
+pins core to an older version explicitly, dependency resolution will refuse the
+upgrade; raise that pin rather than holding this package back.
 
 Then verify:
 
@@ -335,7 +338,6 @@ lib/phoenix_kit_legal/
   services/
     template_generator.ex       # EEx template rendering
   web/
-    consent_config_controller.ex  # JSON API for widget config
     cookie_consent.ex           # Phoenix component (consent widget)
     settings.ex                 # Admin settings LiveView
 priv/
@@ -390,7 +392,21 @@ Requires either `user_uuid` or `session_id` (at least one must be present).
 
 **`GET /phoenix_kit/api/consent-config`** — Returns widget configuration as JSON.
 
-Used by the client-side consent manager to initialize the widget. Cached publicly for 60 seconds. Auth-gating is handled server-side by the component, not this endpoint.
+Used by the client-side consent manager to initialize the widget. Cached
+`private, max-age=60` — the payload embeds locale-dependent translations, so it is
+cacheable per user but must never be shared. Auth-gating is handled server-side by
+the component, not this endpoint.
+
+**The endpoint is owned by `phoenix_kit`, not this package.** Core declares the
+route unconditionally and its `PhoenixKitWeb.Controllers.ConsentConfig` answers 204
+when this package is absent; when it is installed, that controller delegates to
+`Legal.get_consent_widget_config/0` for the payload. This package defined its own
+`PhoenixKitWeb.Controllers.ConsentConfigController` through 0.1.9 and no longer
+does.
+
+That makes core a hard requirement — hence the `{:phoenix_kit, "~> 1.7.227"}` floor
+in `mix.exs`. Core declares the route whenever this module is loaded, so on an older
+core the route resolves to a controller that no longer exists anywhere.
 
 ## Development
 

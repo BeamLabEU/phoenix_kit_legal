@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.1.9"
+  @version "0.1.10"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
@@ -60,7 +60,13 @@ defmodule PhoenixKitLegal.MixProject do
       # 1.7.184 adds `disabled`/`wrapper_class`/`title`/`:description` to
       # `PhoenixKitWeb.Components.Core.Checkbox`, used here. 1.7.189 adds the
       # runtime schema-prefix support `PhoenixKit.SchemaPrefix` relies on.
-      {:phoenix_kit, "~> 1.7.189"},
+      # 1.7.227 is a hard floor, not a preference: it owns
+      # `PhoenixKitWeb.Controllers.ConsentConfigController`, which this package
+      # defined through 0.1.9 and no longer does. Core declares that route
+      # whenever this module is loaded, so on an older core the route resolves to
+      # a module that exists nowhere — UndefinedFunctionError, on every request
+      # the bundled JS makes. See AGENTS.md, "Consent Config Endpoint Contract".
+      {:phoenix_kit, "~> 1.7.227"},
 
       # Publishing module for storing generated legal pages as posts.
       {:phoenix_kit_publishing, "~> 0.1"},

@@ -38,8 +38,6 @@ This is a **library** (not a standalone Phoenix app) that provides legal complia
 
 - **`Legal.TemplateGenerator`** (`lib/phoenix_kit_legal/services/template_generator.ex`) — Renders legal pages from EEx templates with company/DPO context. Supports language-specific templates and parent app overrides.
 
-- **`Legal.Web.ConsentConfigController`** (`lib/phoenix_kit_legal/web/consent_config_controller.ex`) — JSON API endpoint for cookie consent widget configuration. Serves at `/phoenix_kit/api/consent-config`.
-
 - **`Legal.Web.CookieConsent`** (`lib/phoenix_kit_legal/web/cookie_consent.ex`) — Phoenix component rendering the glass-morphic cookie consent widget UI.
 
 - **`Legal.Web.Settings`** (`lib/phoenix_kit_legal/web/settings.ex`) — Admin LiveView for all legal module configuration (frameworks, company info, DPO, page generation, consent widget settings).
@@ -84,6 +82,31 @@ Consequences to keep in mind when changing page-generation code:
   shape; it must stay in sync with Publishing's dispatch, and the cookie consent
   widget shows those links to every visitor
 - Renaming `@legal_blog_slug` changes public URLs and breaks existing inbound links
+
+### Consent Config Endpoint Contract
+
+`GET /phoenix_kit/api/consent-config` is **owned by core**, not by this package.
+Since `phoenix_kit` 1.7.227 core declares the route unconditionally and its
+`PhoenixKitWeb.Controllers.ConsentConfig` answers 204 when this package is absent,
+or delegates to `Legal.get_consent_widget_config/0` when it is present.
+
+**Do not define a consent-config controller here.** This package defined
+`PhoenixKitWeb.Controllers.ConsentConfigController` through 0.1.9; PR #12 removed
+it for 0.1.10. Core deliberately did *not* reuse that name — a host resolving new
+core against legal ≤ 0.1.9 would otherwise have one module compiled into two
+applications, with code-path order deciding which answers. Reintroducing either
+name here re-creates that hazard.
+
+The corollary is a release-ordering rule: deleting the controller makes core's
+version a *hard* requirement, because core declares the route whenever
+`PhoenixKit.Modules.Legal` is loaded. On any core before 1.7.227 that route still
+points at `…ConsentConfigController` — the module this package used to own — so
+every request raises `UndefinedFunctionError`, a 500 per page load, since core's
+bundled `phoenix_kit.js` fetches the endpoint on `DOMContentLoaded` whenever the
+widget root was not server-rendered. Nothing catches it at compile time: Phoenix
+compiles routes to literal tuples, so a missing controller produces no warning.
+Hence `{:phoenix_kit, "~> 1.7.227"}` in `mix.exs` — floored in the same release
+that shipped the deletion, and it must stay floored.
 
 ### Compliance Frameworks (7 total)
 
@@ -139,7 +162,6 @@ lib/
 │   ├── services/
 │   │   └── template_generator.ex     # EEx template rendering
 │   └── web/
-│       ├── consent_config_controller.ex  # JSON API for widget config
 │       ├── cookie_consent.ex         # Phoenix component (consent widget)
 │       └── settings.ex               # Admin settings LiveView
 priv/
