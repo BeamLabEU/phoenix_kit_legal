@@ -105,8 +105,35 @@ every request raises `UndefinedFunctionError`, a 500 per page load, since core's
 bundled `phoenix_kit.js` fetches the endpoint on `DOMContentLoaded` whenever the
 widget root was not server-rendered. Nothing catches it at compile time: Phoenix
 compiles routes to literal tuples, so a missing controller produces no warning.
-Hence `{:phoenix_kit, "~> 1.7.227"}` in `mix.exs` — floored in the same release
-that shipped the deletion, and it must stay floored.
+Hence the `>= 1.7.227` half of the `phoenix_kit` requirement in `mix.exs` —
+floored in the same release that shipped the deletion, and it must stay floored.
+
+### Core Version Compatibility
+
+The requirement is `{:phoenix_kit, ">= 1.7.227 and < 3.0.0"}`, not `~> 1.7.227`.
+The tilde would cap at `< 1.8.0` and lock this module out of the resolver the day
+core cuts 1.8, for no reason: the core surface used here is the
+`PhoenixKit.Module` behaviour, `PhoenixKit.Settings`, `PhoenixKit.Dashboard.Tab`,
+`PhoenixKit.SchemaPrefix`, `PhoenixKit.Utils.Routes`, `PhoenixKit.Cache` and
+`PhoenixKit.Migrations.Postgres` — none of it 1.7-specific.
+
+Two things this does *not* mean:
+
+- **A range is permission to resolve, not a tested claim.** When core ships 1.8
+  or 2.0, run the suite against it before advertising support; a major may drop
+  or rename any API in that list. `< 3.0.0` exists so the next major after this
+  is a decision instead of an inheritance.
+- **Sibling modules can still cap core below 1.8.** `phoenix_kit_publishing`
+  0.4.5 requires `{:phoenix_kit, "~> 1.7.189"}`, so any host installing both
+  resolves core `< 1.8.0` regardless of what this module allows. Widening here is
+  necessary for a core minor/major bump but not sufficient — the sibling
+  requirements have to widen too.
+
+Optional core APIs are detected, not assumed. `test/test_helper.exs` uses
+`Code.ensure_loaded?` + `function_exported?` to skip the i18n tests when the
+resolved core predates `Tab.localized_label/1`, so they re-enable on upgrade
+instead of failing on an older core. Prefer that shape over a version compare
+when reaching for a newly added core function.
 
 ### Compliance Frameworks (7 total)
 

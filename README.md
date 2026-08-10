@@ -175,11 +175,20 @@ mix phoenix_kit.update      # apply any pending schema migrations
 # restart the app
 ```
 
-**From 0.1.10 this package requires `phoenix_kit ~> 1.7.227`** (up from `~> 1.7.189`),
-because core took over the `/api/consent-config` endpoint — see
+**From 0.1.10 this package requires `phoenix_kit` 1.7.227 or newer** (up from
+`~> 1.7.189`), because core took over the `/api/consent-config` endpoint — see
 [API Endpoint](#api-endpoint). The command above pulls core up with it. If your app
 pins core to an older version explicitly, dependency resolution will refuse the
 upgrade; raise that pin rather than holding this package back.
+
+The floor is the only bound that matters here. 0.1.10 spelled the requirement
+`~> 1.7.227`, which also capped core at `< 1.8.0`; it is now
+`>= 1.7.227 and < 3.0.0`, so a core 1.8 or 2.x release resolves beside this package
+rather than being refused by the requirement. Two caveats: resolving is not the same
+as tested — support for a new core major is confirmed by running against it — and
+other PhoenixKit modules may still cap core lower. `phoenix_kit_publishing` 0.4.5
+requires `~> 1.7.189`, i.e. `< 1.8.0`, and a host installing both resolves to the
+stricter of the two.
 
 Then verify:
 
@@ -404,9 +413,10 @@ when this package is absent; when it is installed, that controller delegates to
 `PhoenixKitWeb.Controllers.ConsentConfigController` through 0.1.9 and no longer
 does.
 
-That makes core a hard requirement — hence the `{:phoenix_kit, "~> 1.7.227"}` floor
-in `mix.exs`. Core declares the route whenever this module is loaded, so on an older
-core the route resolves to a controller that no longer exists anywhere.
+That makes core a hard requirement — hence the `>= 1.7.227` floor in the
+`{:phoenix_kit, ">= 1.7.227 and < 3.0.0"}` requirement in `mix.exs`. Core declares
+the route whenever this module is loaded, so on an older core the route resolves to
+a controller that no longer exists anywhere.
 
 ## Development
 
