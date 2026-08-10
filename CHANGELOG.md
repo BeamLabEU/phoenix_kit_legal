@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **`css_sources/0` no longer emits the same directory twice.** On a normal Hex
+  install the callback returned both `:phoenix_kit_legal` and a compile-time
+  absolute source root, and the host's generated
+  `assets/css/_phoenix_kit_sources.css` came out with two directives pointing at
+  one directory:
+
+  ```css
+  @source "../../deps/phoenix_kit_legal";
+  @source "/www/app/deps/phoenix_kit_legal";
+  ```
+
+  The absolute entry was added deliberately in 0.1.9 so `path:` deps resolve, on
+  the stated assumption that the pair collapses for Hex installs. It doesn't:
+  `Mix.Tasks.Compile.PhoenixKitCssSources` runs `Enum.uniq/1` over the raw
+  callback results — an atom and a string, never equal — and formats them into
+  path strings only afterwards. No other PhoenixKit module returned an absolute
+  root, so Legal was the only duplicated entry.
+
+  Effects were cosmetic in the common case (Tailwind scanned the directory
+  twice, and the file is regenerated every compile so it self-corrects per
+  machine), but the absolute path is baked in when *this dep* is compiled, which
+  made a generated file host-specific: git churn if it is committed, and a
+  `@source` that matches nothing if `_build` is carried across a path change,
+  such as a multi-stage Docker build that compiles under one prefix and runs
+  under another.
+
+  The absolute root is now returned only when it is not already what the
+  `:phoenix_kit_legal` entry resolves to. Path deps, umbrellas, and vendored
+  checkouts keep the fallback; standard installs get one directive.
+
+- **The comment justifying the old behaviour said the compiler de-duplicated the
+  pair via `Enum.uniq/1`.** It reads on the wrong side of the formatting step.
+  Replaced with the actual ordering, so the claim is checkable against
+  `compile.phoenix_kit_css_sources.ex`.
+
+### Added
+- `test/phoenix_kit_legal/css_sources_test.exs` — pins the deps/, path-dep, and
+  umbrella layouts, and asserts `css_sources/0` never lists a directory the atom
+  entry already covers.
+
 ## 0.1.10 (2026-08-03)
 
 ### Removed

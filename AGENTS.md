@@ -108,6 +108,24 @@ compiles routes to literal tuples, so a missing controller produces no warning.
 Hence `{:phoenix_kit, "~> 1.7.227"}` in `mix.exs` — floored in the same release
 that shipped the deletion, and it must stay floored.
 
+### Tailwind `css_sources/0` Contract
+
+`css_sources/0` (`legal.ex`) returns the absolute `@source_root` **only** when
+the `:phoenix_kit_legal` atom entry doesn't already cover it. Do not simplify it
+back to `[:phoenix_kit_legal, @source_root]`.
+
+`Mix.Tasks.Compile.PhoenixKitCssSources` in core calls `Enum.uniq/1` on the raw
+callback results — an atom and a path string, never equal — and formats them
+into `@source` lines afterwards, so returning both unconditionally wrote the
+same directory twice into the host's `assets/css/_phoenix_kit_sources.css`, once
+relative and once as a build-machine absolute path. Legal was the only module
+returning an absolute root; Publishing and AI return just the atom.
+
+The absolute entry still has to exist for `{:phoenix_kit_legal, path: "..."}`
+installs, where `../../deps/phoenix_kit_legal` doesn't resolve — hence the
+condition rather than a deletion. `test/phoenix_kit_legal/css_sources_test.exs`
+guards both directions.
+
 ### Compliance Frameworks (7 total)
 
 | ID | Region | Consent Model | Required Pages |

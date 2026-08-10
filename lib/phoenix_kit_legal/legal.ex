@@ -776,13 +776,48 @@ defmodule PhoenixKit.Modules.Legal do
   # the OTP-app atom from `css_sources/0` so parent apps using
   # `{:phoenix_kit_legal, path: "..."}` (or any non-standard layout) get a
   # @source directive that resolves regardless of how the dep is declared.
-  # For Hex installs the absolute path points into `deps/phoenix_kit_legal`,
-  # producing the same effective scan as the atom entry — duplicates are
-  # de-duplicated by the compiler via Enum.uniq/1.
   @source_root Path.expand(Path.join(__DIR__, "../.."))
 
   @impl PhoenixKit.Module
-  def css_sources, do: [:phoenix_kit_legal, @source_root]
+  def css_sources, do: css_sources(@source_root, File.cwd!())
+
+  @doc """
+  `css_sources/0` with the source root and host project root injected, for tests.
+
+  Returns the absolute source root only when it is not already covered by the
+  `:phoenix_kit_legal` atom entry.
+
+  A previous revision returned `[:phoenix_kit_legal, @source_root]`
+  unconditionally, on the assumption that the two collapse into one directive on
+  Hex installs. They don't. `Mix.Tasks.Compile.PhoenixKitCssSources` calls
+  `Enum.uniq/1` on the raw callback results — where the entries are the atom
+  `:phoenix_kit_legal` and a path string, which are never equal — and only then
+  maps them through its formatter. So `assets/css/_phoenix_kit_sources.css` came
+  out with the same directory listed twice:
+
+      @source "../../deps/phoenix_kit_legal";
+      @source "/abs/path/to/app/deps/phoenix_kit_legal";
+
+  The absolute line is baked in at the time *this dep* is compiled, so it names
+  whichever machine or container built it. It is regenerated per build and so
+  self-corrects, but it makes the generated file host-specific — churn if it is
+  ever committed, and a path that scans nothing if `_build` is carried across a
+  relocation (a multi-stage Docker build that compiles under one prefix and runs
+  under another).
+
+  The check compares against exactly what the atom entry resolves to —
+  `<project_root>/deps/phoenix_kit_legal`, since the compiler emits
+  `@source "../../deps/phoenix_kit_legal";` relative to
+  `assets/css/_phoenix_kit_sources.css`. Anything else (path deps, umbrellas,
+  vendored checkouts) still gets the absolute fallback it needs.
+  """
+  def css_sources(source_root, project_root) do
+    if source_root == Path.expand("deps/phoenix_kit_legal", project_root) do
+      [:phoenix_kit_legal]
+    else
+      [:phoenix_kit_legal, source_root]
+    end
+  end
 
   @impl PhoenixKit.Module
   def migration_module, do: PhoenixKit.Modules.Legal.Migrations.ConsentLogs
