@@ -2,6 +2,30 @@
 
 This file provides guidance to AI agents working with code in this repository.
 
+## ⚠️ This module owns no database tables
+
+`phoenix_kit_consent_logs` is a **core** table. It is created by core's migration
+chain (V43, now folded into the squashed V135 baseline) and exists on every
+PhoenixKit install, with or without this package. Core 2.0's
+`PhoenixKit.Migrations.ExpectedSchema` names the table, all 11 columns, 6 indexes
+and the pkey as core-owned, and that manifest is what `mix phoenix_kit.doctor` and
+`mix phoenix_kit.repair` verify live databases against.
+
+**Do not add a `migration_module/0`, a migration coordinator, or a migration
+template under `priv/`.** Three separate DDLs for this one table had accumulated
+by 2026-08-10 — core's, a versioned coordinator here, and a copy-into-your-app
+template the README pointed at — all disagreeing on column widths and index
+names. Two are now deleted, and `test/consent_logs_ownership_test.exs` fails if
+either reappears.
+
+Column widths in `ConsentLog`'s changeset mirror core's exactly (`session_id` 64,
+`consent_type` 30, `consent_version` 20, `ip_address` 45, `user_agent_hash` 64).
+If core widens a column, widen the validation to match rather than dropping it.
+
+If this table's shape needs to change, the change belongs in **core's** chain.
+Full history and evidence:
+`dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+
 ## Project Overview
 
 PhoenixKit Legal — a legal compliance module for the PhoenixKit framework providing GDPR/CCPA/LGPD/PIPEDA compliant legal page generation, a cookie consent widget with Google Consent Mode v2, and consent audit logging. Implements the `PhoenixKit.Module` behaviour for auto-discovery by a parent Phoenix application. Legal pages are stored via the Publishing module.

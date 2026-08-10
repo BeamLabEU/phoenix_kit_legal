@@ -60,14 +60,26 @@ Then it prints the remaining manual steps (migration, JS hook, router scope, com
 
 #### Manual steps after install
 
-**1. Copy and run the migration:**
+**1. Apply the schema:**
 
 ```bash
-cp deps/phoenix_kit_legal/priv/migrations/add_phoenix_kit_consent_logs.exs \
-   priv/repo/migrations/$(date +%Y%m%d%H%M%S)_add_phoenix_kit_consent_logs.exs
-# Edit: rename MyApp.Repo to your repo module name
-mix ecto.migrate
+mix phoenix_kit.update
 ```
+
+`phoenix_kit_consent_logs` is a **core** table — it is created by PhoenixKit's own
+migration chain (core V43, now folded into the squashed V135 baseline), not by this
+package. It exists on every PhoenixKit install, with or without this module, so
+`mix phoenix_kit.update` is all that is needed and is safe to re-run.
+
+> **Removed in 0.3.1:** earlier READMEs told you to copy
+> `priv/migrations/add_phoenix_kit_consent_logs.exs` into your app and run
+> `mix ecto.migrate`. **Do not do that** — that template used `create table`
+> (no `if_not_exists`), so on any install where core had already created the
+> table it failed outright with "table phoenix_kit_consent_logs already exists".
+> It also declared every string column as the Ecto default `varchar(255)`, where
+> core uses `varchar(64)`/`(30)`/`(20)`/`(45)`/`(64)`. The template has been
+> deleted. If you previously ran it and it succeeded, see
+> `dev_docs/reports/2026-08-10-module-migration-versioning.md`.
 
 **2. Wire up the JS hook in `assets/js/app.js`:**
 

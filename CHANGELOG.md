@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.3.1 - 2026-08-10
+
+### Changed
+
+- **⚠️ Requires `phoenix_kit ~> 2.0`.** The core pin moved to `~> 2.0`, so this
+  release no longer resolves against core 1.7.
+
+  Core 2.0.0 squashes the migration chain into a single `V135` baseline and makes
+  V135 the chain's floor: `mix ecto.migrate` now *refuses* on a database below it
+  rather than migrating. Check `mix phoenix_kit.status` **before** upgrading. A
+  host below V135 must install `phoenix_kit 1.7.236` — the migration bridge, the
+  last release carrying the full pre-squash chain — migrate until the reported
+  version is at least V135, and only then move to 2.0.
+
+  This package does not call migration internals, so the change is the pin
+  itself.
+
+### Removed
+
+- **`priv/migrations/add_phoenix_kit_consent_logs.exs`, and the README step that
+  told you to run it.** This was a *third* definition of `phoenix_kit_consent_logs`
+  (after core's and the coordinator removed in 0.3.0), and the only one that
+  could actually break an install:
+
+  - It used `create table`, **not** `create_if_not_exists`. On any host where
+    core had already created the table — which is all of them, since core V43 —
+    `mix ecto.migrate` failed with `table "phoenix_kit_consent_logs" already
+    exists`.
+  - Every string column was the Ecto default `varchar(255)`, against core's
+    `varchar(64)`/`(30)`/`(20)`/`(45)`/`(64)`, with Ecto-default index names —
+    a third naming scheme distinct from core's and the coordinator's.
+
+  `mix phoenix_kit_legal.install` never pointed at this file; it has always
+  printed `mix phoenix_kit.update`, which is correct. The README and the install
+  task had been contradicting each other. README step 1 now matches the task.
+
+  **If you previously ran this template successfully**, your host predates core
+  creating the table and your columns are 255-wide with Ecto-default index names.
+  `mix phoenix_kit.doctor` (core 2.0) reports the divergence and
+  `mix phoenix_kit.repair` is the supported way to reconcile it. Nothing in this
+  package will touch it.
+
+### Added
+
+- **`test/consent_logs_ownership_test.exs`** — fails if a `migration_module/0`, a
+  migration coordinator module, or a `priv/` migration template reappears, and
+  pins `ConsentLog`'s length validations to core's exact column widths. Each
+  regression case was verified by reintroducing the condition and confirming the
+  test fails, not merely that it passes.
+- A schema-ownership section at the top of `AGENTS.md`, so the next contributor
+  sees the constraint before writing a migration.
+
+### Documentation
+
+- `dev_docs/reports/2026-08-10-module-migration-versioning.md` rewritten for
+  review by the module's original author: the full evidence chain (commit
+  `801e66ca`, V43's original DDL, the `phoenix_kit.update` ordering, core's
+  `ExpectedSchema`), all three DDLs side by side, and the finding that PR #8 —
+  while correctly fixing the version-tracking protocol — made the coordinator's
+  `DROP TABLE ... CASCADE` reachable against a core-owned table for the first
+  time.
+
 ## 0.3.0 - 2026-08-10
 
 Requires `phoenix_kit ~> 2.0`, unchanged from 0.2.0.
