@@ -108,6 +108,10 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
   number — `PhoenixKit.Modules.Legal.update_policy_version/1` does, because the
   policy version it stores becomes `consent_version` on every logged consent.
 
+  The unit is **code points**, matching what Postgres counts for `varchar(n)`.
+  A producer checking these numbers with `String.length/1` is counting graphemes
+  and will pass values Postgres rejects — count `String.codepoints/1` instead.
+
   If core widens a column, change it here; the changeset and every producer follow.
   """
   @spec column_widths() :: %{atom() => pos_integer()}
@@ -156,9 +160,16 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
   #
   # Widths come from `@column_widths`, which mirrors core's `ExpectedSchema`; if
   # core widens a column, change it there rather than dropping the check.
+  #
+  # `count: :codepoints` is not decoration. Postgres counts `varchar(n)` in
+  # characters — code points — while `validate_length/3` defaults to graphemes,
+  # and the two disagree on anything with a combining mark or a ZWJ sequence:
+  # 20 graphemes of "é" is 40 code points, passed the grapheme check, and
+  # came back from Postgres as the raw overflow error these validations exist to
+  # replace. `consent_version` is the reachable case — it is host-supplied text.
   defp validate_column_widths(changeset) do
     Enum.reduce(@column_widths, changeset, fn {field, max}, acc ->
-      validate_length(acc, field, max: max)
+      validate_length(acc, field, max: max, count: :codepoints)
     end)
   end
 
@@ -283,6 +294,16 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
         user_uuid: "018e3c4a-1234-5678-abcd-ef1234567890",
         consent_version: "1.0"
       )
+
+  ## Atomicity
+
+  The whole map is written in one transaction, so a rejected entry commits none
+  of the others. Note the consequence for a caller that is *already* inside a
+  transaction: Ecto nests without a savepoint, so the rollback on failure aborts
+  the caller's transaction too and this function does not return — `{:error,
+  errors}` surfaces from the outermost `transaction/1` instead. Callers that
+  need a failed consent write to leave their own work intact must run it outside
+  their transaction.
   """
   @spec log_consents(map(), keyword()) :: {:ok, list(t())} | {:error, term()}
   def log_consents(consents, opts) when is_map(consents) do

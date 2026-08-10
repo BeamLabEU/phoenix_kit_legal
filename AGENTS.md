@@ -106,6 +106,31 @@ Consequences to keep in mind when changing page-generation code:
   shape; it must stay in sync with Publishing's dispatch, and the cookie consent
   widget shows those links to every visitor
 - Renaming `@legal_blog_slug` changes public URLs and breaks existing inbound links
+- `list_generated_pages/0` reads the page timestamp from Publishing's
+  **top-level** `:content_updated_at`, not from `:metadata`. Publishing's
+  `:metadata` map has never had an `:updated_at` key, and reading only that key
+  made the field permanently `nil` — with it `get_auto_policy_version/0`
+  permanently returned the manual setting, so editing a policy page never bumped
+  the consent version and no visitor was ever re-prompted. `test/phoenix_kit_legal/policy_version_test.exs`
+  asserts the key against Publishing's own mapper
+
+### Policy Version Contract
+
+`get_auto_policy_version/0` → `get_consent_widget_config/0` → the widget →
+`phoenix_kit_consent_logs.consent_version`, core's `varchar(20)`. Every producer
+on that chain is bounded by `ConsentLog.column_widths/0`, and an unbounded value
+anywhere on it is an audit-trail outage: the setting is accepted, and every
+consent write afterwards fails validation, far from the change that caused it.
+
+Count **code points**, not `String.length/1`'s graphemes — that is the unit
+Postgres counts for `varchar(n)`, and the two differ on combining marks and ZWJ
+sequences (20 graphemes of `"é"` is 40 code points). This applies equally to
+`validate_length/3`, whose default is graphemes; `validate_column_widths/1`
+passes `count: :codepoints`.
+
+`format_version_date/1` falls back to `get_policy_version/0` on an unparseable
+timestamp rather than returning it verbatim — an offset-less ISO8601 string with
+microseconds is 26 characters.
 
 ### Consent Config Endpoint Contract
 

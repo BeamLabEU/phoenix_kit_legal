@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.3.2 - 2026-08-10
+
+### Fixed
+
+- **The consent policy version never changed, so no visitor was ever re-prompted
+  to consent after a policy update.** `list_generated_pages/0` read each page's
+  timestamp from `metadata.updated_at`, a key Publishing has never emitted — its
+  post map carries the content timestamp at the top level, as
+  `content_updated_at`. The field was therefore permanently `nil`, and
+  `get_auto_policy_version/0` permanently fell through to the manual
+  `legal_policy_version` setting, which the admin UI exposes no input for. The
+  version stayed at its `"1.0"` default for the life of the install, which is the
+  opposite of what versioning it is for.
+
+- **Column-width checks counted the wrong unit.** Postgres counts `varchar(n)` in
+  characters — code points — while `validate_length/3` and `String.length/1`
+  count graphemes. The two agree on ASCII and part ways on combining marks and
+  ZWJ sequences: 20 graphemes of `"é"` is 40 code points, which passed both the
+  changeset added in 0.3.0 and the producer guard added in 0.3.1, then came back
+  from Postgres as the raw `Postgrex.Error` varchar overflow those checks exist
+  to replace. `ConsentLog.create/1` is public API, so the caller had no way to
+  check first. `validate_column_widths/1` now passes `count: :codepoints`, and
+  `Legal.update_policy_version/1` counts `String.codepoints/1`.
+
+- **`format_version_date/1` could emit a version wider than the column.** It
+  returned an unparseable timestamp string verbatim, and its output becomes
+  `consent_version`. An offset-less ISO8601 string with microseconds
+  (`"2026-08-10T22:03:27.123456"`) does not parse and is 26 characters — over
+  core's `varchar(20)`, which would have rejected every consent write afterwards.
+  It now falls back to the width-guarded `get_policy_version/0`, matching the
+  catch-all clause.
+
+### Changed
+
+- `ConsentLog.log_consents/2` documents its behaviour inside a caller's
+  transaction. Ecto nests without a savepoint, so the rollback on a failed entry
+  aborts the caller's transaction too and the function does not return —
+  `{:error, errors}` surfaces from the outermost `transaction/1`. Callers that
+  need their own work to survive a failed consent write must run it outside their
+  transaction.
+
+- `ConsentLog.column_widths/0` states that its numbers are code points, since its
+  purpose is to be read by producers and a producer reading the right number in
+  the wrong unit is back to the drift the map was introduced to end.
+
 ## 0.3.1 - 2026-08-10
 
 ### Changed

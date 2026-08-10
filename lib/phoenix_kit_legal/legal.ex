@@ -499,7 +499,10 @@ defmodule PhoenixKit.Modules.Legal do
   """
   @spec update_policy_version(String.t()) :: {:ok, term()} | {:error, term()}
   def update_policy_version(version) when is_binary(version) do
-    if String.length(version) > ConsentLog.column_widths().consent_version do
+    # Code points, not `String.length/1`'s graphemes — that is the unit Postgres
+    # counts for `varchar(n)`, and the two differ on combining marks and ZWJ
+    # sequences. See the note on `ConsentLog.column_widths/0`.
+    if length(String.codepoints(version)) > ConsentLog.column_widths().consent_version do
       {:error, :version_too_long}
     else
       Settings.update_setting_with_module("legal_policy_version", version, @module_name)
@@ -743,7 +746,13 @@ defmodule PhoenixKit.Modules.Legal do
     # Already a string, try to parse and format
     case DateTime.from_iso8601(datetime) do
       {:ok, dt, _} -> Calendar.strftime(dt, "%Y-%m-%d")
-      _ -> datetime
+      # Returning the unparsed string here made this function's output
+      # unbounded, and its output becomes `consent_version` — core's
+      # `varchar(20)`. An offset-less ISO8601 timestamp with microseconds does
+      # not parse and is 26 characters, which would have rejected every consent
+      # write. Fall back to the manual setting, which is width-guarded by
+      # `update_policy_version/1`.
+      _ -> get_policy_version()
     end
   end
 
@@ -1021,7 +1030,15 @@ defmodule PhoenixKit.Modules.Legal do
           title: get_in(post, [:metadata, :title]) || post.slug,
           status: get_in(post, [:metadata, :status]) || "draft",
           published_at: get_in(post, [:metadata, :published_at]),
-          updated_at: get_in(post, [:metadata, :updated_at]),
+          # Publishing puts the content timestamp at the TOP level of its post
+          # map, as `:content_updated_at` — its `:metadata` map has no
+          # `:updated_at` key at all (`DBStorage.Mapper.build_metadata/5`).
+          # Reading only the metadata key made this field permanently `nil`, and
+          # with it `get_auto_policy_version/0` permanently fell back to the
+          # manual setting: editing a policy page never bumped the consent
+          # version, so visitors were never re-prompted to consent. The metadata
+          # read stays as a fallback for older Publishing releases.
+          updated_at: post[:content_updated_at] || get_in(post, [:metadata, :updated_at]),
           language_statuses: post[:language_statuses] || %{},
           available_languages: post[:available_languages] || []
         }
