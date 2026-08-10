@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.0 - 2026-08-10
+
+### Changed
+
+- **⚠️ Requires `phoenix_kit ~> 2.0`.** The core pin moved to `~> 2.0`, so this
+  release no longer resolves against core 1.7.
+
+  Core 2.0.0 squashes the migration chain into a single `V135` baseline and makes
+  V135 the chain's floor: `mix ecto.migrate` now *refuses* on a database below it
+  rather than migrating. Check `mix phoenix_kit.status` **before** upgrading. A
+  host below V135 must install `phoenix_kit 1.7.236` — the migration bridge, the
+  last release carrying the full pre-squash chain — migrate until the reported
+  version is at least V135, and only then move to 2.0.
+
+  This package does not call migration internals, so the change is the pin
+  itself.
+
+- `phoenix_kit_publishing` raised to `~> 0.5` in step: its 0.5.0 is the first
+  release requiring core 2.0, so the old `~> 0.1` pin could only have resolved a
+  publishing that still required core 1.7 — an unsatisfiable set alongside
+  `phoenix_kit ~> 2.0`.
+
+### Known issue (not fixed in this release)
+
+- **This module's migration coordinator conflicts with core's V43.** Core's
+  migrations run *before* module migrations in the same task, so where core also
+  ships the DDL, core wins on every host and this module's `up/1` is dead code
+  that has drifted out of sync. Core V43 creates `phoenix_kit_consent_logs`, and
+  the two definitions disagree on four column definitions and the primary key.
+  Surfaced by the audit behind `phoenix_kit_hello_world#34`, which fixed the
+  template this coordinator was copied from — not the coordinator itself.
+  Reconciling needs a real migration step and is out of scope for a pin bump.
+  See `dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+
 ## Unreleased
 
 ### Fixed

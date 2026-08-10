@@ -24,7 +24,7 @@ Add `phoenix_kit_legal` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:phoenix_kit_legal, "~> 0.1"}
+    {:phoenix_kit_legal, "~> 0.2"}
   ]
 end
 ```

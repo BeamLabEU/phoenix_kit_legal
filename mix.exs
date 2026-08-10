@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.1.10"
+  @version "0.2.0"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
@@ -66,10 +66,10 @@ defmodule PhoenixKitLegal.MixProject do
       # whenever this module is loaded, so on an older core the route resolves to
       # a module that exists nowhere — UndefinedFunctionError, on every request
       # the bundled JS makes. See AGENTS.md, "Consent Config Endpoint Contract".
-      {:phoenix_kit, "~> 1.7.227"},
+      {:phoenix_kit, "~> 2.0"},
 
       # Publishing module for storing generated legal pages as posts.
-      {:phoenix_kit_publishing, "~> 0.1"},
+      {:phoenix_kit_publishing, "~> 0.5"},
 
       # LiveView for admin settings page.
       {:phoenix_live_view, "~> 1.0"},
