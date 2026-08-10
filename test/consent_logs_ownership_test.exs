@@ -132,4 +132,86 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
       assert changeset.valid?
     end
   end
+
+  describe "column widths stay tied to core's manifest" do
+    alias PhoenixKit.Migrations.ExpectedSchema
+    alias PhoenixKit.Modules.Legal.ConsentLog
+
+    # The widths were hand-copied from core once. A comment saying "keep these in
+    # sync" is what produced three disagreeing DDLs, so this reads core's manifest
+    # instead: if core widens a column, or adds a varchar one this package does not
+    # validate, the test says so.
+    setup do
+      widths =
+        ExpectedSchema.objects("public")
+        |> Enum.filter(
+          &(&1.class == :column and
+              String.starts_with?(&1.id, "column:phoenix_kit_consent_logs."))
+        )
+        |> Enum.flat_map(fn object ->
+          case Regex.run(~r/character varying\((\d+)\)/, object.create) do
+            [_, width] -> [{object.id, String.to_integer(width)}]
+            nil -> []
+          end
+        end)
+        |> Map.new()
+
+      # Guard against both tests below passing vacuously if core's manifest API or
+      # its object shape changes and the parse yields nothing.
+      assert map_size(widths) > 0,
+             "parsed no varchar columns out of ExpectedSchema — the manifest shape changed"
+
+      %{core_widths: widths}
+    end
+
+    test "every width this package validates is core's width", %{core_widths: core_widths} do
+      for {field, declared} <- ConsentLog.column_widths() do
+        id = "column:phoenix_kit_consent_logs.#{field}"
+
+        assert Map.fetch!(core_widths, id) == declared,
+               """
+               #{field}: this package validates max #{declared}, core declares \
+               #{inspect(Map.get(core_widths, id))}.
+
+               Update ConsentLog.column_widths/0 to match core rather than dropping
+               the validation.
+               """
+      end
+    end
+
+    test "no varchar column of core's goes unvalidated", %{core_widths: core_widths} do
+      # Compared as strings on purpose. Converting core's column names to atoms
+      # would raise on the very case this test exists to report — a column core
+      # added that this package has no field for — turning the intended failure
+      # message into an ArgumentError from the test's own setup.
+      validated = MapSet.new(Map.keys(ConsentLog.column_widths()), &Atom.to_string/1)
+
+      unvalidated =
+        core_widths
+        |> Map.keys()
+        |> Enum.map(&String.replace(&1, "column:phoenix_kit_consent_logs.", ""))
+        |> Enum.reject(&MapSet.member?(validated, &1))
+
+      assert unvalidated == [],
+             """
+             Core declares varchar columns this package does not length-validate: \
+             #{inspect(unvalidated)}.
+
+             `ConsentLog.create/1` is public API, so an over-long value returns a raw
+             Postgrex varchar overflow instead of a changeset error.
+             """
+    end
+  end
+
+  describe "producers respect core's widths" do
+    test "update_policy_version/1 rejects a version core's column cannot hold" do
+      # The policy version becomes `consent_version` on every logged consent
+      # (get_consent_widget_config/0 -> widget -> ConsentLog). Storing an
+      # over-long one succeeds and then fails every consent write afterwards, far
+      # from the setting that caused it.
+      too_long = String.duplicate("v", 21)
+
+      assert {:error, :version_too_long} = Legal.update_policy_version(too_long)
+    end
+  end
 end
