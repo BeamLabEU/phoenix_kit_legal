@@ -118,7 +118,26 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
     ])
     |> validate_required([:consent_type])
     |> validate_inclusion(:consent_type, @consent_types)
+    |> validate_column_widths()
     |> validate_user_or_session()
+  end
+
+  # `phoenix_kit_consent_logs` is a CORE table (see the note on
+  # `migration_module/0` in PhoenixKit.Modules.Legal), and core's columns are
+  # narrower than this schema previously assumed. Without these, an over-long
+  # value from a host app reaches Postgres and comes back as a raw
+  # `Postgrex.Error` on a `varchar` overflow instead of a changeset error —
+  # `create/1` is public API, so the caller has no way to validate first.
+  #
+  # Widths mirror core's `ExpectedSchema` exactly; if core widens a column,
+  # widen it here too rather than dropping the check.
+  defp validate_column_widths(changeset) do
+    changeset
+    |> validate_length(:session_id, max: 64)
+    |> validate_length(:consent_type, max: 30)
+    |> validate_length(:consent_version, max: 20)
+    |> validate_length(:ip_address, max: 45)
+    |> validate_length(:user_agent_hash, max: 64)
   end
 
   # Validate that either user_uuid or session_id is present

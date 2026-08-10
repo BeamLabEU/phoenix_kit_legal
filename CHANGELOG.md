@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.3.0 - 2026-08-10
+
+Requires `phoenix_kit ~> 2.0`, unchanged from 0.2.0.
+
+### Removed
+
+- **`migration_module/0` and the standalone consent-logs migration.**
+  `phoenix_kit_consent_logs` is a **core** table, not this package's, and this
+  package's migration had never run on any host — nor could it.
+
+  Legal began life inside core: the same commit that added "Legal Module Phase 1"
+  added core's **V43**, which created the table. When this package was extracted,
+  core kept V43, and a *fresh* coordinator was written here from the Ecto schema
+  rather than copied from V43 — so the two DDLs drifted. Core's V43 DDL now lives
+  in the squashed **V135** baseline, which is unconditional: the table exists on
+  every phoenix_kit install, with or without this package.
+
+  It could never run for two independent reasons. Core's chain migrates before
+  module migrations in the same task, and both DDLs are
+  `CREATE TABLE IF NOT EXISTS` — so by the time this module's `up/1` was reached,
+  the table already existed.
+
+  It still mattered, because `down/1` ran
+  `DROP TABLE IF EXISTS phoenix_kit_consent_logs CASCADE` against a table core
+  owns and that outlives this package. While the version was inferred from table
+  existence that rollback looked unreachable; repairing the version marker would
+  have armed it. Core 2.0 also added `PhoenixKit.Migrations.ExpectedSchema`,
+  which names this table, all 11 columns, 6 indexes and the pkey as core-owned
+  and is what `mix phoenix_kit.doctor` / `mix phoenix_kit.repair` verify against
+  — so the divergent shape was one core would report as damage.
+
+  **No runtime change:** a migration that never ran cannot stop running. Any
+  future change to this table belongs in core's chain.
+
+  Full analysis: `dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+
+### Fixed
+
+- **`ConsentLog` had no length validations, on any field.** Core's columns are
+  narrower than the deleted DDL assumed — `session_id` is `varchar(64)` (this
+  package assumed 255) and `consent_version` is `varchar(20)` (assumed 50).
+  `ConsentLog.create/1` is public API host apps call, so an over-long value came
+  back as a raw Postgres varchar-overflow error instead of a changeset error the
+  caller could handle. Now validated at core's exact widths: `session_id` 64,
+  `consent_type` 30, `consent_version` 20, `ip_address` 45, `user_agent_hash` 64.
+
 ## 0.2.0 - 2026-08-10
 
 ### Changed
@@ -22,17 +68,10 @@
   publishing that still required core 1.7 — an unsatisfiable set alongside
   `phoenix_kit ~> 2.0`.
 
-### Known issue (not fixed in this release)
+### Known issue (resolved in 0.3.0)
 
-- **This module's migration coordinator conflicts with core's V43.** Core's
-  migrations run *before* module migrations in the same task, so where core also
-  ships the DDL, core wins on every host and this module's `up/1` is dead code
-  that has drifted out of sync. Core V43 creates `phoenix_kit_consent_logs`, and
-  the two definitions disagree on four column definitions and the primary key.
-  Surfaced by the audit behind `phoenix_kit_hello_world#34`, which fixed the
-  template this coordinator was copied from — not the coordinator itself.
-  Reconciling needs a real migration step and is out of scope for a pin bump.
-  See `dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+- This module's migration coordinator conflicted with core's ownership of
+  `phoenix_kit_consent_logs`. Resolved in 0.3.0 — see that entry.
 
 ## Unreleased
 
