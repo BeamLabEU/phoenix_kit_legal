@@ -264,7 +264,65 @@ Ordered, because F5 gates the rest:
 
 Step 3 needs a decision on the authoritative column sizes, and steps 1–2 are a
 restructure of a file that currently runs on no host — so the change is safe to make but
-not mechanical. It is not included in this report's commit.
+not mechanical.
+
+---
+
+## Resolution
+
+All three steps landed the same day. The decisions taken, and two things the audit above
+did not know:
+
+**Column widths and index names.** Widths take the wider of the two (255/50/50) — widening
+a varchar is catalogue-only in Postgres and rejecting a long `session_id` at the database
+layer is worse than storing it. Index *names* take Core's, because those are the ones every
+existing host already carries; this module's four have never existed anywhere, so adopting
+Core's means V2 creates nothing on a Core-created table and only drops the never-deployed
+names where they somehow exist.
+
+**V1's DDL was corrected, not frozen.** That contradicts the immutability rule, and it is
+sound only because of F3: Core's chain reaches V43 long before any core release this module
+supports, so `up_v1/1` was unreachable on every host. Recorded in the moduledoc and
+AGENTS.md as an exception that does not extend to `up_v2/1`.
+
+### Two findings that only appeared during implementation
+
+**`ensure_uuid_v7_function/1` does not install extensions.** F7 said to schema-qualify the
+`uuid_generate_v7()` call and ensure the function. Doing exactly that still produced a
+table that failed on first insert: the function is built on pgcrypto's `gen_random_bytes`,
+and ensuring the function does not ensure pgcrypto. On every real host Core's chain has
+already installed it, which is why neither the audit nor the independent review saw this —
+it only surfaces on a database that has not run Core's chain, i.e. exactly the standalone
+case the module claims to support. `Helpers.ensure_extension!("pgcrypto")` now runs first.
+
+**`CREATE INDEX IF NOT EXISTS` matches on name, not definition.** The reconciliation
+originally specified `(inserted_at DESC)` for an index whose Core-created counterpart is
+`btree (inserted_at)`. Because the name matches, Postgres skips creation on every upgraded
+host and applies the `DESC` version only to fresh installs — reintroducing the two-shapes
+divergence that the step exists to remove, in the step that removes it. Matching Core's
+definitions exactly is therefore part of the contract, not a detail. A plain btree serves
+`ORDER BY inserted_at DESC` by scanning backwards, so nothing was lost by conforming.
+
+### Verification
+
+The ExUnit suite runs without a repo, so it pins the protocol shape and the
+prefix-raises behaviour only (4 tests, 42 total). The DDL is covered by
+`test/scripts/verify_consent_logs_migration.exs` against a real Postgres — 35 assertions,
+all passing:
+
+| Case | Asserted |
+|---|---|
+| Fresh install 0→2 | table, marker `"2"`, canonical indexes, `metadata NOT NULL` |
+| `up(version: 2)` twice | idempotent |
+| **Rollback 2→1** | **table and row survive**, marker `"1"`, `metadata` nullable again |
+| Rollback 1→0 | table dropped |
+| Legacy V43 shape, prose comment | reads as V1; V2 widens 64→255, 30→50, 20→50, backfills NULL `metadata`, drops the legacy index |
+| Named-schema install | works, `uuid_generate_v7()` resolves inside the prefix |
+| Invalid prefix | raises `ArgumentError` |
+| **Both paths converge** | column types, widths, defaults **and index definitions** identical between a converged-legacy schema and a fresh one |
+
+The last row is the one that earned its keep: it is what caught the `DESC` mistake, and it
+was confirmed non-vacuous by reintroducing that mistake and watching it fail.
 
 ---
 

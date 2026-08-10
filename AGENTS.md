@@ -135,6 +135,49 @@ resolved core predates `Tab.localized_label/1`, so they re-enable on upgrade
 instead of failing on an older core. Prefer that shape over a version compare
 when reaching for a newly added core function.
 
+### Module Migrations
+
+This module owns the DDL for its own table. It is **not** added as a new `Vxxx` to
+core's migration chain — that would tie this schema to a core release and grow the
+core package for hosts that never install Legal.
+
+`PhoenixKit.Modules.Legal.Migrations.ConsentLogs` implements the protocol
+`mix phoenix_kit.update` calls: `current_version/0`, `migrated_version/1`
+(migration context), `migrated_version_runtime/1` (Mix-task context), `up/1`,
+`down/1`. Core reads the two version functions, and when the database is behind it
+writes a migration into the *host* app that calls back into `up/1`. Hosts never
+hand-write SQL for this table and this package ships no install task.
+
+Rules, each of which this module got wrong before 2026-08-10 — see
+`dev_docs/reports/2026-08-10-module-migration-versioning.md`:
+
+- **The version is stored in the table's `COMMENT`, never inferred from the table
+  existing.** Existence distinguishes 0 from non-zero and nothing more, so an
+  existence check reports "current" for every version and silently skips deltas.
+- **Reading it tolerates prose.** Core's V43 created this table with a descriptive
+  comment; `Integer.parse/1` plus a fallback to V1 handles that. `String.to_integer/1`
+  raises, and a raise inside the runtime reader becomes "not installed".
+- **A reader that cannot answer must not answer 0.** An invalid prefix re-raises.
+- **`down(version: N)` returns to N.** Only `version: 0` drops the table. This one
+  is a data-loss rule: the table is the consent audit trail.
+- **Version steps are immutable once shipped.** `up_v1/1` was rewritten in 0.1.11
+  only because it was provably unreachable — core's V43 creates the table long
+  before any supported core release, so no host had ever run it. That argument does
+  not extend to `up_v2/1`.
+- **Assume nothing about core's chain having run.** `Helpers.ensure_extension!/1`,
+  `ensure_uuid_v7_function/1` and `uuid_v7_call/1` before touching uuid defaults;
+  `prefix:` on everything; bare index names on `CREATE`.
+
+The ExUnit suite runs without a repo, so it pins only the protocol shape and the
+prefix-raises behaviour. The DDL is verified against a real Postgres by:
+
+```bash
+mix run test/scripts/verify_consent_logs_migration.exs
+```
+
+It builds its own scratch database, replays both V1 shapes, and checks the
+convergence, rollback and named-schema cases. Run it after touching the migration.
+
 ### Compliance Frameworks (7 total)
 
 | ID | Region | Consent Model | Required Pages |
@@ -160,6 +203,12 @@ when reaching for a newly added core function.
 - Requires either `user_uuid` or `session_id` (at least one)
 
 This is the only database table. Legal pages are stored in the Publishing module's tables.
+
+Its `COMMENT ON TABLE` holds the module's schema version as a bare integer — that is
+the version marker `mix phoenix_kit.update` reads, so the table's prose description
+(core V43 put one there) lives in this section instead. Schema version 2 widened
+`session_id` to 255, `consent_type` and `consent_version` to 50, made `metadata`
+non-null, and settled on core's `phoenix_kit_consent_logs_*_idx` index names.
 
 ### Template System
 
