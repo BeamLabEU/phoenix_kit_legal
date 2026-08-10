@@ -164,7 +164,10 @@ guards both directions.
 
 ### Database Table
 
-**`phoenix_kit_consent_logs`** — Consent audit trail (UUIDv7 PK)
+**`phoenix_kit_consent_logs`** — consent audit trail (UUIDv7 PK). **Core's table, not
+this package's** — see the warning at the top of this file. This package reads and
+writes it and ships no DDL for it; the only table it touches, and it owns none.
+Legal pages are stored in the Publishing module's tables.
 
 - `uuid` (UUIDv7), `user_uuid` (optional), `session_id` (optional) — identity
 - `consent_type` — "necessary", "analytics", "marketing", or "preferences"
@@ -174,7 +177,16 @@ guards both directions.
 - `metadata` JSONB — extensible additional data
 - Requires either `user_uuid` or `session_id` (at least one)
 
-This is the only database table. Legal pages are stored in the Publishing module's tables.
+Core's `varchar` widths are declared once, in `ConsentLog.column_widths/0` (the
+numbers are listed in the warning at the top of this file). The changeset derives
+its length validations from that map and `Legal.update_policy_version/1` reads its
+limit from it — anything else that produces a value for one of these columns
+should read it too rather than restating the number. `test/consent_logs_ownership_test.exs`
+checks the map against core's `ExpectedSchema`, so a core change surfaces as a
+failing test rather than as silent drift.
+
+Writes go through `ConsentLog.changeset/2`; `log_consents/2` wraps the whole map in
+one transaction, so a rejected entry commits none of the others.
 
 ### Template System
 

@@ -53,6 +53,7 @@ defmodule PhoenixKit.Modules.Legal do
             ]}
 
   alias PhoenixKit.Dashboard.Tab
+  alias PhoenixKit.Modules.Legal.ConsentLog
   alias PhoenixKit.Modules.Legal.LegalFramework
   alias PhoenixKit.Modules.Legal.PageType
   alias PhoenixKit.Modules.Legal.TemplateGenerator
@@ -473,10 +474,36 @@ defmodule PhoenixKit.Modules.Legal do
 
   @doc """
   Update policy version.
+
+  Rejects a version longer than core's width for
+  `phoenix_kit_consent_logs.consent_version`, which this value can reach:
+  `get_consent_widget_config/0` publishes the active version to the widget as
+  `policy_version`, and the consent a visitor gives is logged with it as
+  `consent_version`.
+
+  This setting is the active version only while no cookie-policy or
+  privacy-policy page is published — `get_auto_policy_version/0` otherwise derives
+  the version from the latest page's `updated_at` and returns a 10-character date,
+  which cannot overflow the column. So the window is narrower than "always", and
+  in it an over-long value stored here is accepted and then rejects every consent
+  write in `ConsentLog.changeset/2`: an audit-trail outage whose cause is a
+  setting changed somewhere else entirely.
+
+  The width is read from `ConsentLog.column_widths/0` rather than restated, so it
+  cannot drift from the validation that enforces it.
+
+  ## Returns
+
+  - `{:ok, setting}` on success
+  - `{:error, :version_too_long}` when the string exceeds the column width
   """
   @spec update_policy_version(String.t()) :: {:ok, term()} | {:error, term()}
   def update_policy_version(version) when is_binary(version) do
-    Settings.update_setting_with_module("legal_policy_version", version, @module_name)
+    if String.length(version) > ConsentLog.column_widths().consent_version do
+      {:error, :version_too_long}
+    else
+      Settings.update_setting_with_module("legal_policy_version", version, @module_name)
+    end
   end
 
   @doc """

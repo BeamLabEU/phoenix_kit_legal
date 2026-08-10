@@ -67,6 +67,18 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
 
   @consent_types ["necessary", "analytics", "marketing", "preferences"]
 
+  # Core's column widths for this table, from `PhoenixKit.Migrations.ExpectedSchema`.
+  # Declared once and read by everything that needs them — a second copy of these
+  # numbers elsewhere in the package is how three disagreeing DDLs happened in the
+  # first place (dev_docs/reports/2026-08-10-module-migration-versioning.md).
+  @column_widths %{
+    session_id: 64,
+    consent_type: 30,
+    consent_version: 20,
+    ip_address: 45,
+    user_agent_hash: 64
+  }
+
   @primary_key {:uuid, UUIDv7, autogenerate: true}
 
   schema "phoenix_kit_consent_logs" do
@@ -87,6 +99,19 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
   """
   @spec consent_types() :: list(String.t())
   def consent_types, do: @consent_types
+
+  @doc """
+  Core's maximum length for each `varchar` column of this table.
+
+  The authority for these numbers in this package. Anything that produces a value
+  destined for one of these columns should ask here rather than restating the
+  number — `PhoenixKit.Modules.Legal.update_policy_version/1` does, because the
+  policy version it stores becomes `consent_version` on every logged consent.
+
+  If core widens a column, change it here; the changeset and every producer follow.
+  """
+  @spec column_widths() :: %{atom() => pos_integer()}
+  def column_widths, do: @column_widths
 
   @doc """
   Creates a changeset for consent log entry.
@@ -129,15 +154,12 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
   # `Postgrex.Error` on a `varchar` overflow instead of a changeset error —
   # `create/1` is public API, so the caller has no way to validate first.
   #
-  # Widths mirror core's `ExpectedSchema` exactly; if core widens a column,
-  # widen it here too rather than dropping the check.
+  # Widths come from `@column_widths`, which mirrors core's `ExpectedSchema`; if
+  # core widens a column, change it there rather than dropping the check.
   defp validate_column_widths(changeset) do
-    changeset
-    |> validate_length(:session_id, max: 64)
-    |> validate_length(:consent_type, max: 30)
-    |> validate_length(:consent_version, max: 20)
-    |> validate_length(:ip_address, max: 45)
-    |> validate_length(:user_agent_hash, max: 64)
+    Enum.reduce(@column_widths, changeset, fn {field, max}, acc ->
+      validate_length(acc, field, max: max)
+    end)
   end
 
   # Validate that either user_uuid or session_id is present
@@ -273,24 +295,30 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
       metadata: Keyword.get(opts, :metadata, %{})
     }
 
-    results =
-      Enum.map(consents, fn {consent_type, consent_given} ->
-        attrs =
-          Map.merge(base_attrs, %{
-            consent_type: consent_type,
-            consent_given: consent_given
-          })
+    # One transaction for the whole map. Without it a partial failure — a
+    # consent_type outside `@consent_types`, or a value over one of core's column
+    # widths — committed the entries that happened to come first and still
+    # returned `{:error, ...}`, leaving the caller with a half-written audit trail
+    # it had no way to enumerate, and a retry that duplicates whatever landed.
+    # Return shapes are unchanged; only the partial commit is gone.
+    repo().transaction(fn -> insert_consents(consents, base_attrs) end)
+  end
 
-        create(attrs)
-      end)
-
+  defp insert_consents(consents, base_attrs) do
+    results = Enum.map(consents, &insert_consent(&1, base_attrs))
     errors = Enum.filter(results, &match?({:error, _}, &1))
 
     if Enum.empty?(errors) do
-      {:ok, Enum.map(results, fn {:ok, log} -> log end)}
+      Enum.map(results, fn {:ok, log} -> log end)
     else
-      {:error, errors}
+      repo().rollback(errors)
     end
+  end
+
+  defp insert_consent({consent_type, consent_given}, base_attrs) do
+    base_attrs
+    |> Map.merge(%{consent_type: consent_type, consent_given: consent_given})
+    |> create()
   end
 
   @doc """
