@@ -67,10 +67,16 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
 
   @consent_types ["necessary", "analytics", "marketing", "preferences"]
 
-  # Core's column widths for this table, from `PhoenixKit.Migrations.ExpectedSchema`.
-  # Declared once and read by everything that needs them — a second copy of these
-  # numbers elsewhere in the package is how three disagreeing DDLs happened in the
-  # first place (dev_docs/reports/2026-08-10-module-migration-versioning.md).
+  # The column widths for this table — the single authority in this package.
+  # Declared once and read by everything that needs them: the changeset
+  # validations, every producer, AND the module migration chain's DDL
+  # (`Migrations.up_statements/1` interpolates these, never restates them) — a
+  # second copy of these numbers elsewhere is how three disagreeing DDLs
+  # happened in the first place
+  # (dev_docs/reports/2026-08-10-module-migration-versioning.md). They currently
+  # coincide with core's V135 baseline shape, which `ExpectedSchema` audits;
+  # changing one is a chain version (V2+) and must follow the shape-change
+  # protocol in dev_docs/reports/2026-08-10-consent-logs-extraction.md.
   @column_widths %{
     session_id: 64,
     consent_type: 30,
@@ -101,18 +107,24 @@ defmodule PhoenixKit.Modules.Legal.ConsentLog do
   def consent_types, do: @consent_types
 
   @doc """
-  Core's maximum length for each `varchar` column of this table.
+  The maximum length for each `varchar` column of this table.
 
-  The authority for these numbers in this package. Anything that produces a value
-  destined for one of these columns should ask here rather than restating the
-  number — `PhoenixKit.Modules.Legal.update_policy_version/1` does, because the
-  policy version it stores becomes `consent_version` on every logged consent.
+  The authority for these numbers in this package. Anything that produces a
+  value destined for one of these columns should ask here rather than restating
+  the number — `PhoenixKit.Modules.Legal.update_policy_version/1` does, because
+  the policy version it stores becomes `consent_version` on every logged
+  consent. The module migration chain reads them too:
+  `Migrations.up_statements/1` builds its DDL from this map, so the schema,
+  the validations and the migrations cannot disagree.
 
   The unit is **code points**, matching what Postgres counts for `varchar(n)`.
   A producer checking these numbers with `String.length/1` is counting graphemes
   and will pass values Postgres rejects — count `String.codepoints/1` instead.
 
-  If core widens a column, change it here; the changeset and every producer follow.
+  Widening a column is a migration-chain version (V2+): change it here, add the
+  chain version that alters the column, and follow the shape-change protocol in
+  `dev_docs/reports/2026-08-10-consent-logs-extraction.md` (core's manifest
+  audits the old shape until its excluded-object list is updated).
   """
   @spec column_widths() :: %{atom() => pos_integer()}
   def column_widths, do: @column_widths

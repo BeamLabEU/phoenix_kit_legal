@@ -1,6 +1,10 @@
 # `phoenix_kit_consent_logs`: three DDLs, one table, and who actually owns it
 
 **2026-08-10** · Resolved in **phoenix_kit_legal 0.3.0** and **0.3.1**.
+**Ownership since revisited the same evening** — the drift cleanup below
+stands, but the table's future shape now belongs to the module-owned chain
+introduced in `2026-08-10-consent-logs-extraction.md` (the "core owns it"
+pin was the stopgap that made that extraction safe to do properly).
 **Written for review by the module's original author** — every claim below cites
 a file, line or commit you can check yourself, and the commands to re-derive them
 are included.

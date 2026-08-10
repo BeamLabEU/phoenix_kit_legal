@@ -67,6 +67,11 @@ defmodule PhoenixKitLegal.MixProject do
       # a module that exists nowhere — UndefinedFunctionError, on every request
       # the bundled JS makes. See AGENTS.md, "Consent Config Endpoint Contract".
       {:phoenix_kit, "~> 2.0"},
+      # Build MDEx's Rust NIF from source on OTP versions it ships no
+      # compatible precompiled NIF for — same escape hatch core's mix.exs
+      # carries: MDEx's force_build requires rustler itself, not just
+      # rustler_precompiled. Optional: pulled only to compile the NIF.
+      {:rustler, ">= 0.0.0", optional: true},
 
       # Publishing module for storing generated legal pages as posts.
       {:phoenix_kit_publishing, "~> 0.5"},
