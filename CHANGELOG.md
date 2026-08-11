@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.4.0 - 2026-08-11
+
+### Changed
+
+- **`phoenix_kit_consent_logs`' future shape now belongs to a module-owned
+  migration chain** (#16), `PhoenixKit.Modules.Legal.Migrations`, marker
+  `pkl_schema:<N>`. V1 is an **adoption, not a create**: core's V135 baseline
+  still creates the table on every install, and V1 re-asserts that exact shape
+  idempotently and stamps the marker. Because no shape changes, core's
+  `ExpectedSchema` stays accurate — **no core release is required and there is
+  no release-ordering hazard**.
+
+  This revisits the same-day 0.3.0/0.3.1 "core owns it" pin deliberately. That
+  cleanup killed two drifted in-package DDL copies and stands; this is the
+  extraction it made safe, with the drift class solved at the root —
+  `up_statements/1` interpolates `ConsentLog.column_widths/0` and there is no
+  second copy of those numbers anywhere in the package.
+
+  **`down/1` can never drop the table.** It unstamps the marker and nothing
+  else: the rows are a GDPR/CCPA consent audit trail and on most installs the
+  table is core-created. Test-pinned — no statement in either direction may
+  match `DROP`/`TRUNCATE`/`DELETE`.
+
+  Existing hosts: upgrade, then `mix phoenix_kit.update`; a wrapper migration
+  stamps `pkl_schema:1` and nothing else changes. New hosts and hosts without
+  Legal: unchanged.
+
+  The V2+ shape-change protocol (core's `@excluded_exact` + manifest
+  regeneration, then a core-floor bump here) is in
+  `dev_docs/reports/2026-08-10-consent-logs-extraction.md`.
+
+- Carries core's rustler escape hatch (`{:rustler, ">= 0.0.0", optional: true}`)
+  so MDEx's NIF builds from source on OTP versions shipping no compatible
+  precompiled NIF.
+
+### Added
+
+- The ownership test now cross-checks **every column** against core's manifest
+  — names, types, defaults and nullability — not only the varchar widths. A
+  width-only comparison passes while a type, a default or a `NOT NULL` drifts,
+  which is the same blind spot that produced three disagreeing DDLs in the
+  first place.
+
 ## 0.3.2 - 2026-08-10
 
 ### Fixed

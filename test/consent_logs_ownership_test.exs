@@ -248,6 +248,82 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
                """
       end
     end
+
+    # Widths are only the part of the shape that has a number in it. "V1
+    # changes no shape" also covers which columns exist, their types, their
+    # defaults and their nullability — and the width check above passes
+    # happily while any of those drift. That is the same blind spot the
+    # three-DDLs incident had: the copies agreed where somebody had thought to
+    # compare them.
+    #
+    # The manifest carries all of it, so compare all of it. `create` omits
+    # NOT NULL for columns core backfills separately (inserted_at,
+    # updated_at), so nullability comes from the latest revision, which is the
+    # shape a migrated database ends up in.
+    test "every column core declares matches V1's, in full" do
+      core = core_columns()
+      ours = v1_columns()
+
+      assert Map.keys(ours) -- Map.keys(core) == [],
+             "V1 creates columns core's manifest does not declare: " <>
+               inspect(Map.keys(ours) -- Map.keys(core))
+
+      assert Map.keys(core) -- Map.keys(ours) == [],
+             "V1 does not create columns core's manifest declares: " <>
+               inspect(Map.keys(core) -- Map.keys(ours))
+
+      for {column, expected} <- core do
+        assert Map.fetch!(ours, column) == expected,
+               """
+               #{column}: V1 and core's manifest disagree on the column's shape.
+
+               V1:              #{inspect(Map.fetch!(ours, column))}
+               core's manifest: #{inspect(expected)}
+
+               V1 is an adoption and must be shape-identical to core's
+               baseline. A deliberate change is a chain version (V2+) and
+               follows the excluded-object protocol in
+               dev_docs/reports/2026-08-10-consent-logs-extraction.md.
+               """
+      end
+    end
+
+    # `%{type, default, not_null}` per column, from the newest revision.
+    defp core_columns do
+      ExpectedSchema.objects("public")
+      |> Enum.filter(
+        &(&1.class == :column and
+            String.starts_with?(&1.id, "column:phoenix_kit_consent_logs."))
+      )
+      |> Map.new(fn object ->
+        {_version, shape} = List.last(object.revisions)
+
+        {String.replace_prefix(object.id, "column:phoenix_kit_consent_logs.", ""),
+         %{type: shape.type, default: shape.default, not_null: shape.not_null}}
+      end)
+    end
+
+    # The same shape, parsed back out of the CREATE TABLE V1 emits.
+    defp v1_columns do
+      [create | _] = Migrations.up_statements()
+
+      ~r/^\s*"(\w+)"\s+(.+?),?$/m
+      |> Regex.scan(create)
+      |> Map.new(fn [_line, name, definition] -> {name, parse_column(definition)} end)
+    end
+
+    defp parse_column(definition) do
+      {definition, not_null} =
+        case String.replace_suffix(definition, " NOT NULL", "") do
+          ^definition -> {definition, false}
+          trimmed -> {trimmed, true}
+        end
+
+      case String.split(definition, " DEFAULT ", parts: 2) do
+        [type] -> %{type: type, default: nil, not_null: not_null}
+        [type, default] -> %{type: type, default: default, not_null: not_null}
+      end
+    end
   end
 
   describe "producers respect the declared widths" do
