@@ -855,25 +855,20 @@ defmodule PhoenixKit.Modules.Legal do
     end
   end
 
-  # NOTE: Legal deliberately does NOT implement
-  # `PhoenixKit.Module.migration_module/0`.
-  #
-  # `phoenix_kit_consent_logs` is a CORE table, not this package's. Legal
-  # began life inside core — the same commit that added "Legal Module Phase 1"
-  # added core's V43, which created the table — and when this package was
-  # extracted, core kept V43. That DDL now lives in core's squashed V135
-  # baseline, and core 2.0's `PhoenixKit.Migrations.ExpectedSchema` names the
-  # table, all 11 columns, 6 indexes and the pkey as core-owned, which is what
-  # `mix phoenix_kit.doctor` and `mix phoenix_kit.repair` verify against.
-  #
-  # The table therefore exists on every phoenix_kit install, whether or not
-  # this package is present, and core's migrations run before module
-  # migrations (`mix phoenix_kit.update` runs the core chain, then
-  # `run_module_migrations/1`). A module migration here could only ever be a
-  # `CREATE TABLE IF NOT EXISTS` that finds the table already there.
-  #
-  # Do not re-add one. If this table's shape needs to change, the change
-  # belongs in core's chain.
+  @impl PhoenixKit.Module
+  # Module-owned migration chain (the decentralization protocol; projects
+  # is the reference impl, document_creator the same shape over
+  # core-created tables). Core's V135 baseline still CREATES
+  # phoenix_kit_consent_logs on every install — this chain ADOPTS it (V1
+  # stamps the `pkl_schema:` marker without changing shape) and owns its
+  # future evolution. 0.3.0/0.3.1 briefly pinned the table as core-owned
+  # while killing two drifted in-package DDL copies; this chain is the
+  # deliberate extraction that followed, with the drift class solved at
+  # the root — the DDL widths are read from `ConsentLog.column_widths/0`,
+  # never restated. History and the V2+ shape-change protocol:
+  # dev_docs/reports/2026-08-10-module-migration-versioning.md and
+  # dev_docs/reports/2026-08-10-consent-logs-extraction.md.
+  def migration_module, do: PhoenixKit.Modules.Legal.Migrations
 
   # NOTE: Legal deliberately does NOT implement
   # `PhoenixKit.Module.reserved_route_prefixes/0`.

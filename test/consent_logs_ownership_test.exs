@@ -2,78 +2,163 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
   use ExUnit.Case, async: true
 
   alias PhoenixKit.Modules.Legal
+  alias PhoenixKit.Modules.Legal.ConsentLog
+  alias PhoenixKit.Modules.Legal.Migrations
 
   @moduledoc """
-  Pins the decision that `phoenix_kit_consent_logs` is a **core** table and this
-  package ships no DDL for it.
+  Pins the ownership design for `phoenix_kit_consent_logs`: this package owns
+  the table's FUTURE shape through its module migration chain, while core's
+  V135 baseline still creates the table on every install and the chain's V1
+  merely ADOPTS it (stamps the `pkl_schema:` marker, changes no shape).
 
-  Background, with the evidence: `dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+  History, in order — both reports live in `dev_docs/reports/`:
 
-  Short version: the table was created by core's V43 — in the same commit that
-  first added the Legal module, when Legal was still part of core — and stayed in
-  core's chain when this package was extracted. Core 2.0's
-  `PhoenixKit.Migrations.ExpectedSchema` names the table, all 11 columns, 6
-  indexes and the pkey as core-owned, and `mix phoenix_kit.doctor` verifies live
-  databases against it.
+    * `2026-08-10-module-migration-versioning.md` — the package had
+      accumulated two DDL copies of a core-created table, both drifted from
+      core's and from each other; 0.3.0/0.3.1 deleted them and pinned the
+      table as core-owned.
+    * `2026-08-10-consent-logs-extraction.md` — the deliberate extraction that
+      followed: a module-owned chain whose DDL is BUILT from
+      `ConsentLog.column_widths/0`, so the drift class that forced the 0.3.0
+      cleanup cannot recur. These tests are the pin.
 
-  This package nonetheless accumulated two more definitions of the same table,
-  both drifted from core and from each other. They are gone. These tests fail if
-  either comes back, because the failure mode is silent: a second DDL behind a
-  `CREATE TABLE IF NOT EXISTS` is invisible until the day something drops or
-  alters the table out from under core.
+  What must stay true:
 
-  If you are here because a test failed and you believe this module *should* own
-  the table, read the report first — the answer is almost certainly that the
-  schema change belongs in core's migration chain.
+    * exactly ONE DDL source in this package (`Migrations.up_statements/1`),
+      and its widths ARE `ConsentLog.column_widths/0`;
+    * the chain can never drop the table — the rows are a GDPR/CCPA consent
+      audit trail, and on most installs the table is core-created;
+    * V1 stays shape-identical to core's V135 baseline (core's
+      `ExpectedSchema` audits that shape); the first shape-changing version
+      must follow the excluded-object protocol in the extraction report.
   """
 
-  test "Legal declares no migration_module/0" do
-    # Assert the VALUE, not `function_exported?/3`. Two traps:
-    #
-    #   * `use PhoenixKit.Module` injects a `defoverridable` default
-    #     `def migration_module, do: nil`, so the function is ALWAYS exported —
-    #     exportedness says nothing about whether this module declares one.
-    #   * `function_exported?/3` returns false for a module that is merely not
-    #     loaded yet, so a `refute function_exported?` here passes vacuously.
-    #
-    # Declaring a real one puts this package into `mix phoenix_kit.update`'s
-    # module-migration list — where its `up/1` can only ever be a no-op (core
-    # creates the table first), while its `down/1` becomes a live
-    # `DROP TABLE ... CASCADE` against a core-owned table.
+  test "Legal declares the module-owned migration chain" do
+    # Assert the VALUE, not `function_exported?/3` — `use PhoenixKit.Module`
+    # injects an overridable default `migration_module/0`, so exportedness
+    # says nothing about whether this module declares one.
     assert Code.ensure_loaded?(Legal)
 
-    assert Legal.migration_module() == nil,
+    assert Legal.migration_module() == Migrations,
            """
-           PhoenixKit.Modules.Legal declares migration_module/0 again \
-           (returns #{inspect(Legal.migration_module())}).
+           PhoenixKit.Modules.Legal no longer declares its migration chain \
+           (migration_module/0 returned #{inspect(Legal.migration_module())}).
 
-           `phoenix_kit_consent_logs` belongs to core (V43, now the V135 baseline).
-           A coordinator here cannot create it — core migrates first, and both
-           DDLs are CREATE TABLE IF NOT EXISTS — but its down/1 CAN drop it.
-
-           See dev_docs/reports/2026-08-10-module-migration-versioning.md
+           The chain is how the table's future shape is versioned (pkl_schema
+           marker) and how `mix phoenix_kit.update` migrates hosts. Removing it
+           reverts to the pre-extraction state — read
+           dev_docs/reports/2026-08-10-consent-logs-extraction.md before doing
+           that deliberately.
            """
   end
 
-  test "no migration coordinator module is compiled into the package" do
-    refute Code.ensure_loaded?(Legal.Migrations.ConsentLogs),
-           """
-           Legal.Migrations.ConsentLogs is back.
+  describe "the coordinator implements the protocol" do
+    test "current_version/0 and version_table/0" do
+      assert Migrations.current_version() == 1
+      assert Migrations.version_table() == "phoenix_kit_consent_logs"
+    end
 
-           This module was deleted in 0.3.0. Its DDL disagreed with core's on
-           four column widths, the metadata nullability, the timestamp defaults
-           and every index name.
+    test "rejects a prefix that cannot be safely interpolated into DDL" do
+      for bad <- ["public.\"; DROP TABLE x; --", "1st", "a-b", ""] do
+        assert_raise ArgumentError, fn -> Migrations.up_statements(bad) end
+        assert_raise ArgumentError, fn -> Migrations.down_statements(bad, 0) end
+      end
+    end
+  end
 
-           See dev_docs/reports/2026-08-10-module-migration-versioning.md
-           """
+  describe "the chain DDL is built from ConsentLog.column_widths/0" do
+    # The one lesson of the three-DDLs incident: never a second copy of the
+    # numbers. The CREATE is parsed back and compared width-by-width.
+    test "every varchar width in the CREATE is the declared width" do
+      [create | _] = Migrations.up_statements()
+
+      parsed =
+        Regex.scan(~r/"(\w+)" character varying\((\d+)\)/, create)
+        |> Map.new(fn [_, col, width] -> {col, String.to_integer(width)} end)
+
+      declared = Map.new(ConsentLog.column_widths(), fn {k, v} -> {Atom.to_string(k), v} end)
+
+      assert parsed == declared,
+             """
+             The CREATE TABLE widths and ConsentLog.column_widths/0 disagree.
+
+             parsed from DDL: #{inspect(parsed)}
+             declared:        #{inspect(declared)}
+
+             up_statements/1 must interpolate column_widths/0 — never restate
+             a number.
+             """
+    end
+
+    test "V1 uses core's exact object names (shape-identical adoption)" do
+      statements = Enum.join(Migrations.up_statements(), "\n")
+
+      # Core V135's names, verbatim: the pkey and all six indexes.
+      for name <- [
+            "phoenix_kit_consent_logs_pkey",
+            "phoenix_kit_consent_logs_uuid_unique_index",
+            "phoenix_kit_consent_logs_inserted_at_idx",
+            "phoenix_kit_consent_logs_session_id_idx",
+            "phoenix_kit_consent_logs_session_type_idx",
+            "phoenix_kit_consent_logs_type_idx",
+            "phoenix_kit_consent_logs_user_uuid_idx"
+          ] do
+        assert statements =~ name,
+               "V1 no longer creates #{name} — it must stay shape-identical to core's V135"
+      end
+    end
+
+    test "up stamps the version marker, and stamps it last" do
+      statements = Migrations.up_statements()
+
+      assert List.last(statements) ==
+               "COMMENT ON TABLE public.phoenix_kit_consent_logs IS 'pkl_schema:1'",
+             "the marker must be stamped after the DDL it certifies, not before"
+    end
+
+    test "every up statement is guarded (IF NOT EXISTS / DO-block idempotence)" do
+      # V1 runs on installs where core's V135 already created everything.
+      for stmt <- Migrations.up_statements(), not String.starts_with?(stmt, "COMMENT") do
+        assert stmt =~ "IF NOT EXISTS",
+               "statement is not idempotent against a core-created table:\n#{stmt}"
+      end
+    end
+  end
+
+  describe "the chain can never destroy the audit trail" do
+    test "no statement in either direction matches DROP or TRUNCATE" do
+      all =
+        Migrations.up_statements() ++
+          Migrations.down_statements("public", 0) ++
+          Migrations.down_statements("public", 1)
+
+      for stmt <- all do
+        refute stmt =~ ~r/\b(DROP|TRUNCATE|DELETE)\b/i,
+               """
+               A chain statement can destroy phoenix_kit_consent_logs:
+
+               #{stmt}
+
+               The table is a GDPR/CCPA consent audit trail and on most installs
+               it is core-created. down/1 unstamps the marker; nothing more.
+               """
+      end
+    end
+
+    test "down to 0 removes the marker; down to a version restamps it" do
+      assert Migrations.down_statements("public", 0) ==
+               ["COMMENT ON TABLE public.phoenix_kit_consent_logs IS NULL"]
+
+      assert Migrations.down_statements("public", 1) ==
+               ["COMMENT ON TABLE public.phoenix_kit_consent_logs IS 'pkl_schema:1'"]
+    end
   end
 
   test "no migration template is shipped in priv/" do
     # `priv/migrations/add_phoenix_kit_consent_logs.exs` was a copy-into-your-app
-    # template the README pointed at. It used `create table` rather than
-    # `create_if_not_exists`, so on any install where core had already created
-    # the table it failed outright — and it declared every string column as the
-    # Ecto default varchar(255) against core's 64/30/20/45/64.
+    # template the README pointed at, deleted in 0.3.0. Hosts migrate through
+    # `mix phoenix_kit.update` (which discovers the chain) — never by copying
+    # DDL by hand.
     priv = :code.priv_dir(:phoenix_kit_legal) |> to_string()
     stray = Path.wildcard(Path.join([priv, "migrations", "*.exs"]))
 
@@ -81,22 +166,13 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
            """
            Migration templates found in priv/: #{inspect(stray)}
 
-           This package ships no DDL for phoenix_kit_consent_logs. Hosts get the
-           table from core's chain via `mix phoenix_kit.update`, which is what
-           `mix phoenix_kit_legal.install` already tells them to run.
-
-           See dev_docs/reports/2026-08-10-module-migration-versioning.md
+           The chain in PhoenixKit.Modules.Legal.Migrations is the only DDL
+           source; hosts run `mix phoenix_kit.update`.
            """
   end
 
-  describe "ConsentLog changeset guards core's column widths" do
-    alias PhoenixKit.Modules.Legal.ConsentLog
-
-    # Core's widths, from PhoenixKit.Migrations.ExpectedSchema. Without these
-    # validations an over-long value reaches Postgres and comes back as a raw
-    # varchar-overflow error — `create/1` is public API, so the caller has no
-    # way to check first.
-    test "rejects a session_id longer than core's varchar(64)" do
+  describe "ConsentLog changeset guards the declared column widths" do
+    test "rejects a session_id longer than varchar(64)" do
       changeset =
         ConsentLog.changeset(%ConsentLog{}, %{
           consent_type: "necessary",
@@ -107,7 +183,7 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
       assert {"should be at most %{count} character(s)", _} = changeset.errors[:session_id]
     end
 
-    test "rejects a consent_version longer than core's varchar(20)" do
+    test "rejects a consent_version longer than varchar(20)" do
       changeset =
         ConsentLog.changeset(%ConsentLog{}, %{
           consent_type: "necessary",
@@ -119,7 +195,7 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
       assert {"should be at most %{count} character(s)", _} = changeset.errors[:consent_version]
     end
 
-    test "accepts values at exactly core's limits" do
+    test "accepts values at exactly the limits" do
       changeset =
         ConsentLog.changeset(%ConsentLog{}, %{
           consent_type: "necessary",
@@ -133,16 +209,17 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     end
   end
 
-  describe "column widths stay tied to core's manifest" do
+  describe "V1 stays aligned with core's manifest (while core audits the table)" do
     alias PhoenixKit.Migrations.ExpectedSchema
-    alias PhoenixKit.Modules.Legal.ConsentLog
 
-    # The widths were hand-copied from core once. A comment saying "keep these in
-    # sync" is what produced three disagreeing DDLs, so this reads core's manifest
-    # instead: if core widens a column, or adds a varchar one this package does not
-    # validate, the test says so.
-    setup do
-      widths =
+    # Core's V135 baseline still creates this table and core's ExpectedSchema
+    # audits that shape, so until the first shape-changing chain version the
+    # two DDLs must agree. When a future core release stops naming the table
+    # (or a V2+ follows the excluded-object protocol), this comparison has
+    # nothing to check and passes empty — the self-consistency tests above
+    # carry the invariant from then on.
+    test "every width core declares is the width this package declares" do
+      core_widths =
         ExpectedSchema.objects("public")
         |> Enum.filter(
           &(&1.class == :column and
@@ -156,59 +233,29 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
         end)
         |> Map.new()
 
-      # Guard against both tests below passing vacuously if core's manifest API or
-      # its object shape changes and the parse yields nothing.
-      assert map_size(widths) > 0,
-             "parsed no varchar columns out of ExpectedSchema — the manifest shape changed"
-
-      %{core_widths: widths}
-    end
-
-    test "every width this package validates is core's width", %{core_widths: core_widths} do
-      for {field, declared} <- ConsentLog.column_widths() do
-        id = "column:phoenix_kit_consent_logs.#{field}"
-
-        assert Map.fetch!(core_widths, id) == declared,
+      for {field, declared} <- ConsentLog.column_widths(),
+          core = Map.get(core_widths, "column:phoenix_kit_consent_logs.#{field}"),
+          core != nil do
+        assert core == declared,
                """
-               #{field}: this package validates max #{declared}, core declares \
-               #{inspect(Map.get(core_widths, id))}.
+               #{field}: this package declares max #{declared}, core's manifest \
+               declares #{core}.
 
-               Update ConsentLog.column_widths/0 to match core rather than dropping
-               the validation.
+               V1 must stay shape-identical to core's baseline. A deliberate
+               width change is a chain version (V2+) and follows the
+               excluded-object protocol in
+               dev_docs/reports/2026-08-10-consent-logs-extraction.md.
                """
       end
     end
-
-    test "no varchar column of core's goes unvalidated", %{core_widths: core_widths} do
-      # Compared as strings on purpose. Converting core's column names to atoms
-      # would raise on the very case this test exists to report — a column core
-      # added that this package has no field for — turning the intended failure
-      # message into an ArgumentError from the test's own setup.
-      validated = MapSet.new(Map.keys(ConsentLog.column_widths()), &Atom.to_string/1)
-
-      unvalidated =
-        core_widths
-        |> Map.keys()
-        |> Enum.map(&String.replace(&1, "column:phoenix_kit_consent_logs.", ""))
-        |> Enum.reject(&MapSet.member?(validated, &1))
-
-      assert unvalidated == [],
-             """
-             Core declares varchar columns this package does not length-validate: \
-             #{inspect(unvalidated)}.
-
-             `ConsentLog.create/1` is public API, so an over-long value returns a raw
-             Postgrex varchar overflow instead of a changeset error.
-             """
-    end
   end
 
-  describe "producers respect core's widths" do
-    test "update_policy_version/1 rejects a version core's column cannot hold" do
+  describe "producers respect the declared widths" do
+    test "update_policy_version/1 rejects a version the column cannot hold" do
       # The policy version becomes `consent_version` on every logged consent
       # (get_consent_widget_config/0 -> widget -> ConsentLog). Storing an
-      # over-long one succeeds and then fails every consent write afterwards, far
-      # from the setting that caused it.
+      # over-long one succeeds and then fails every consent write afterwards,
+      # far from the setting that caused it.
       too_long = String.duplicate("v", 21)
 
       assert {:error, :version_too_long} = Legal.update_policy_version(too_long)
