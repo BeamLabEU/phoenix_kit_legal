@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.2 - 2026-08-18
+
+### Fixed
+
+- **daisyUI 5 form classes that styled nothing.** The DPO contact form in the
+  admin settings page (`web/settings.html.heex`) still used daisyUI 4's
+  `form-control` / `input-bordered` / `label-text` / `label-text-alt`, which v5
+  dropped — the classes did nothing and the fields lost their intended
+  spacing/border styling. Replaced with v5's `fieldset` / `input` /
+  `fieldset-legend` / `fieldset-label`.
+
+### Changed
+
+- Dependency updates: `phoenix_kit` 2.13.1, `phoenix_kit_publishing` 0.7.0, and
+  the transitive set they pull.
+- Hardened `test/consent_logs_ownership_test.exs`,
+  `test/schema_prefix_conformance_test.exs`, and
+  `test/phoenix_kit_legal/i18n_test.exs` against vacuous guards (#17, #18) —
+  several checks could not fail because the list or set they iterated could be
+  empty, or pinned Ecto's message text instead of its error metadata. No
+  behaviour change; not shipped in the package (`test/` is excluded from the
+  Hex `files:` list).
+
 ## 0.4.1 - 2026-08-11
 
 ### Changed
