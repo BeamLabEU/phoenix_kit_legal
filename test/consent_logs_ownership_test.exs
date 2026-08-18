@@ -218,6 +218,14 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     # (or a V2+ follows the excluded-object protocol), this comparison has
     # nothing to check and passes empty — the self-consistency tests above
     # carry the invariant from then on.
+    #
+    # That intended empty is why the guard below exists rather than a blanket
+    # "assert we parsed something": an empty parse has two causes and only one
+    # of them is benign. Core dropping the table from its manifest is the
+    # documented one. A `create` string this regex no longer matches is not —
+    # and it silences the comparison while leaving every width unchecked, which
+    # is agreement by accident. The column set tells them apart, because it is
+    # read from `revisions` and does not depend on the `create` format.
     test "every width core declares is the width this package declares" do
       core_widths =
         ExpectedSchema.objects("public")
@@ -232,6 +240,19 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
           end
         end)
         |> Map.new()
+
+      if core_columns() != %{} do
+        assert core_widths != %{},
+               """
+               Core's manifest still declares columns for this table, but no
+               `character varying(N)` was parsed out of any of them.
+
+               The width comparison below has therefore been silently skipping
+               every field. Fix the parse in this test — do not delete the
+               comparison. If core has genuinely stopped declaring the table,
+               `core_columns/0` is empty too and this guard does not fire.
+               """
+      end
 
       for {field, declared} <- ConsentLog.column_widths(),
           core = Map.get(core_widths, "column:phoenix_kit_consent_logs.#{field}"),
