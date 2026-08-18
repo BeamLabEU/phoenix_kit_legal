@@ -231,6 +231,21 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     # naming the table. `core_columns/0` is what decides that, and the widths
     # are derived from the same map, so both sides are keyed by bare column
     # name and there is one parse to break instead of two drifting ones.
+    #
+    # Two residues of that choice, named so the next reader does not have to
+    # rediscover them:
+    #
+    #   * If `core_columns/0` itself returns nothing — core renames the object
+    #     id format, say — this test passes empty, because every field is then
+    #     legitimately "not declared". The guard in that case is
+    #     `every column core declares matches V1's, in full`, which reads the
+    #     same map and asserts set equality with V1's own columns, so an empty
+    #     core side fails there. One shared source is why that works; it is
+    #     also why this test cannot be the one to catch it.
+    #   * A field in `column_widths/0` whose name does not match its column
+    #     name would drop out of the comparison silently. They are one-to-one
+    #     today, so this is theoretical — but the mapping is `Atom.to_string/1`
+    #     and nothing asserts it.
     test "every width core declares is the width this package declares" do
       core = core_columns()
       widths = core_varchar_widths()
