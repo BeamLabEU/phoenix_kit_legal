@@ -214,59 +214,55 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
 
     # Core's V135 baseline still creates this table and core's ExpectedSchema
     # audits that shape, so until the first shape-changing chain version the
-    # two DDLs must agree. When a future core release stops naming the table
-    # (or a V2+ follows the excluded-object protocol), this comparison has
-    # nothing to check and passes empty — the self-consistency tests above
-    # carry the invariant from then on.
+    # two DDLs must agree.
     #
-    # That intended empty is why the guard below exists rather than a blanket
-    # "assert we parsed something": an empty parse has two causes and only one
-    # of them is benign. Core dropping the table from its manifest is the
-    # documented one. A `create` string this regex no longer matches is not —
-    # and it silences the comparison while leaving every width unchecked, which
-    # is agreement by accident. The column set tells them apart, because it is
-    # read from `revisions` and does not depend on the `create` format.
+    # The invariant is PER FIELD, and that matters more than it looks. An
+    # earlier version of this test collected core's widths into a map and
+    # compared under `core != nil`, which silently dropped every field whose
+    # key was absent — so a parse that stopped matching some of core's columns
+    # left the test green with however many comparisons happened to survive.
+    # Checking that the map was non-empty did not fix it: one width out of
+    # eleven is non-empty. Partial breakage is both likelier than total and
+    # quieter — a column added in another DDL spelling, a case change — so the
+    # missing key has to fail the field, not skip it.
+    #
+    # Core no longer declaring a column AT ALL stays benign: that is the
+    # documented empty for a V2+ excluded object, or a future core that stops
+    # naming the table. `core_columns/0` is what decides that, and the widths
+    # are derived from the same map, so both sides are keyed by bare column
+    # name and there is one parse to break instead of two drifting ones.
     test "every width core declares is the width this package declares" do
-      core_widths =
-        ExpectedSchema.objects("public")
-        |> Enum.filter(
-          &(&1.class == :column and
-              String.starts_with?(&1.id, "column:phoenix_kit_consent_logs."))
-        )
-        |> Enum.flat_map(fn object ->
-          case Regex.run(~r/character varying\((\d+)\)/, object.create) do
-            [_, width] -> [{object.id, String.to_integer(width)}]
-            nil -> []
-          end
-        end)
-        |> Map.new()
+      core = core_columns()
+      widths = core_varchar_widths()
 
-      if core_columns() != %{} do
-        assert core_widths != %{},
-               """
-               Core's manifest still declares columns for this table, but no
-               `character varying(N)` was parsed out of any of them.
+      for {field, declared} <- ConsentLog.column_widths() do
+        name = Atom.to_string(field)
 
-               The width comparison below has therefore been silently skipping
-               every field. Fix the parse in this test — do not delete the
-               comparison. If core has genuinely stopped declaring the table,
-               `core_columns/0` is empty too and this guard does not fire.
-               """
-      end
+        if Map.has_key?(core, name) do
+          assert Map.has_key?(widths, name),
+                 """
+                 #{name}: core's manifest declares this column, but no varchar \
+                 width could be read from it.
 
-      for {field, declared} <- ConsentLog.column_widths(),
-          core = Map.get(core_widths, "column:phoenix_kit_consent_logs.#{field}"),
-          core != nil do
-        assert core == declared,
-               """
-               #{field}: this package declares max #{declared}, core's manifest \
-               declares #{core}.
+                 Its declared type is #{inspect(get_in(core, [name, :type]))}.
 
-               V1 must stay shape-identical to core's baseline. A deliberate
-               width change is a chain version (V2+) and follows the
-               excluded-object protocol in
-               dev_docs/reports/2026-08-10-consent-logs-extraction.md.
-               """
+                 Either the type spelling this test parses has changed — fix the
+                 parse, do not let the field fall out of the comparison — or core
+                 has changed the column away from varchar, which this package
+                 still length-validates at #{declared} and must stop doing.
+                 """
+
+          assert Map.fetch!(widths, name) == declared,
+                 """
+                 #{name}: this package declares max #{declared}, core's manifest \
+                 declares #{Map.fetch!(widths, name)}.
+
+                 V1 must stay shape-identical to core's baseline. A deliberate
+                 width change is a chain version (V2+) and follows the
+                 excluded-object protocol in
+                 dev_docs/reports/2026-08-10-consent-logs-extraction.md.
+                 """
+        end
       end
     end
 
@@ -322,6 +318,20 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
         {String.replace_prefix(object.id, "column:phoenix_kit_consent_logs.", ""),
          %{type: shape.type, default: shape.default, not_null: shape.not_null}}
       end)
+    end
+
+    # Widths read out of the very same map `core_columns/0` returns, so the
+    # width comparison and the full-shape comparison cannot disagree about
+    # which columns core declares or how they are keyed.
+    defp core_varchar_widths do
+      core_columns()
+      |> Enum.flat_map(fn {name, %{type: type}} ->
+        case Regex.run(~r/character varying\((\d+)\)/, type) do
+          [_, width] -> [{name, String.to_integer(width)}]
+          nil -> []
+        end
+      end)
+      |> Map.new()
     end
 
     # The same shape, parsed back out of the CREATE TABLE V1 emits.
