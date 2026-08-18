@@ -2,29 +2,43 @@
 
 This file provides guidance to AI agents working with code in this repository.
 
-## ⚠️ This module owns no database tables
+## ⚠️ This module owns the shape of one core-created table
 
-`phoenix_kit_consent_logs` is a **core** table. It is created by core's migration
-chain (V43, now folded into the squashed V135 baseline) and exists on every
-PhoenixKit install, with or without this package. Core 2.0's
-`PhoenixKit.Migrations.ExpectedSchema` names the table, all 11 columns, 6 indexes
-and the pkey as core-owned, and that manifest is what `mix phoenix_kit.doctor` and
-`mix phoenix_kit.repair` verify live databases against.
+`phoenix_kit_consent_logs` is created by core's migration chain (V43, now folded
+into the squashed V135 baseline), so it exists on every PhoenixKit install, with or
+without this package. Core 2.0's `PhoenixKit.Migrations.ExpectedSchema` still names
+the table, all 11 columns, 6 indexes and the pkey as core-owned, and that manifest
+is what `mix phoenix_kit.doctor` and `mix phoenix_kit.repair` verify live databases
+against.
 
-**Do not add a `migration_module/0`, a migration coordinator, or a migration
-template under `priv/`.** Three separate DDLs for this one table had accumulated
-by 2026-08-10 — core's, a versioned coordinator here, and a copy-into-your-app
-template the README pointed at — all disagreeing on column widths and index
-names. Two are now deleted, and `test/consent_logs_ownership_test.exs` fails if
-either reappears.
+Since 0.4.0 this package owns the table's **future** shape, through
+`PhoenixKit.Modules.Legal.Migrations` — returned by `migration_module/0`
+(`legal.ex:871`). V1 of that chain is an *adoption*, not a create: `CREATE TABLE IF
+NOT EXISTS` with core's exact object names, then a `pkl_schema:1` comment marker. It
+changes no shape, which is why core's manifest stays accurate and no core release
+was required. Rationale and the per-audience upgrade paths:
+`dev_docs/reports/2026-08-10-consent-logs-extraction.md`.
 
-Column widths in `ConsentLog`'s changeset mirror core's exactly (`session_id` 64,
-`consent_type` 30, `consent_version` 20, `ip_address` 45, `user_agent_hash` 64).
-If core widens a column, widen the validation to match rather than dropping it.
+What the chain must never do — each pinned by `test/consent_logs_ownership_test.exs`:
 
-If this table's shape needs to change, the change belongs in **core's** chain.
-Full history and evidence:
-`dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+- **Never restate a column width.** Every varchar width in the DDL is interpolated
+  from `ConsentLog.column_widths/0`, this package's single width authority. Three
+  separate DDLs for this one table had accumulated by 2026-08-10 — core's, a
+  coordinator here, and a copy-into-your-app template the README pointed at — all
+  disagreeing on widths and index names
+  (`dev_docs/reports/2026-08-10-module-migration-versioning.md`). A second copy of
+  those numbers is how that happened.
+- **Never ship a migration template under `priv/`.** Hosts migrate through
+  `mix phoenix_kit.update`, which discovers the chain and writes the wrapper itself.
+- **Never emit `DROP`, `TRUNCATE` or `DELETE`.** The rows are a GDPR/CCPA consent
+  audit trail, and on every current install the table is core-created; `down/1`
+  unstamps the marker and does nothing else.
+
+Changing the table's shape is a chain version (V2+), and it is **not** a
+free-standing change: it must follow the excluded-object protocol in the extraction
+report, because core's manifest audits the V135 shape until core's generated
+baseline excludes the altered objects. A width change that skips that step should
+fail review.
 
 ## Project Overview
 
