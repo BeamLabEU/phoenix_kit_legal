@@ -144,56 +144,96 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
   end
 
   describe "the chain can never destroy the audit trail" do
-    test "no statement in either direction matches DROP or TRUNCATE" do
-      # Enumerated by hand, so the enumeration is what has to be defended. An
-      # empty statement list satisfies "nothing destructive" trivially and
-      # leaves every direction unexercised: `refute` over zero elements is a
-      # green test that inspected nothing. Reproduced by emptying both
-      # builders — this test stayed green while five others reddened.
-      #
-      # `0` and `1` are both branches of `down_statements/2` (target zero
-      # unstamps, positive restamps), and a non-public prefix is included
-      # because the prefix is interpolated into every statement.
-      directions = [
-        {"up", Migrations.up_statements()},
-        {"up (prefixed)", Migrations.up_statements("legal_alt")},
-        {"down to 0", Migrations.down_statements("public", 0)},
-        {"down to 1", Migrations.down_statements("public", 1)},
-        {"down to 1 (prefixed)", Migrations.down_statements("legal_alt", 1)}
-      ]
-
-      for {label, statements} <- directions do
-        refute statements == [],
-               """
-               #{label} produced no statements.
-
-               An empty direction passes the destructiveness check by having
-               nothing to check. Whatever emptied it, fix that — do not let the
-               direction fall out of this test.
-               """
-      end
-
-      all = Enum.flat_map(directions, fn {_label, statements} -> statements end)
-
-      for stmt <- all do
-        refute stmt =~ ~r/\b(DROP|TRUNCATE|DELETE)\b/i,
-               """
-               A chain statement can destroy phoenix_kit_consent_logs:
-
-               #{stmt}
-
-               The table is a GDPR/CCPA consent audit trail and on most installs
-               it is core-created. down/1 unstamps the marker; nothing more.
-               """
-      end
-    end
-
-    test "down to 0 removes the marker; down to a version restamps it" do
+    # Compared against the WHOLE expected content, not scanned for a forbidden
+    # substring. Three reasons, all learned the hard way:
+    #
+    #   * A substring check only sees statements the builder produced. Anything
+    #     appended past it — a literal `execute("DROP TABLE ...")` in `up/1` —
+    #     is invisible to it. (That path is closed by the test below this
+    #     describe block, which checks what is executed rather than what is
+    #     built.)
+    #   * One surviving harmless statement satisfies both "not empty" and "no
+    #     DROP" at once, so those two assertions together still allow every
+    #     other statement to vanish.
+    #   * Requiring the list to be non-empty forbids the safest legitimate
+    #     outcome. Core created this table; V1 adopts it. A rollback that does
+    #     nothing at all is correct here, and a test that demands rollback
+    #     "do something" pushes the next maintainer exactly where not touching
+    #     is safer. Under equality an empty rollback is an expected value to
+    #     write down, not a violation to work around.
+    #
+    # For `down/1` the expected content is the full statement text: two lines,
+    # so exactness is cheap and total.
+    test "down/1 emits exactly the marker bookkeeping, in every target and prefix" do
       assert Migrations.down_statements("public", 0) ==
                ["COMMENT ON TABLE public.phoenix_kit_consent_logs IS NULL"]
 
       assert Migrations.down_statements("public", 1) ==
                ["COMMENT ON TABLE public.phoenix_kit_consent_logs IS 'pkl_schema:1'"]
+
+      assert Migrations.down_statements("legal_alt", 0) ==
+               ["COMMENT ON TABLE legal_alt.phoenix_kit_consent_logs IS NULL"]
+
+      assert Migrations.down_statements("legal_alt", 2) ==
+               ["COMMENT ON TABLE legal_alt.phoenix_kit_consent_logs IS 'pkl_schema:2'"]
+    end
+
+    # For `up/1` the expected content is the full set of OPERATIONS rather than
+    # the full SQL text. Pasting nine statements here would put a second copy of
+    # the DDL in the test suite, which is the defect this module spent 0.3.0
+    # unwinding. An operation is `{verb, object}`, which is immune to
+    # reformatting and still fails on any statement added, removed or retargeted
+    # — including a destructive one, which cannot enter this set without
+    # changing it.
+    @up_operations [
+      {"CREATE TABLE", "phoenix_kit_consent_logs"},
+      {"DO", "phoenix_kit_consent_logs_pkey"},
+      {"CREATE UNIQUE INDEX", "phoenix_kit_consent_logs_uuid_unique_index"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_inserted_at_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_session_id_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_session_type_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_type_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_user_uuid_idx"},
+      {"COMMENT ON TABLE", "phoenix_kit_consent_logs"}
+    ]
+
+    test "up/1 emits exactly these operations and no others" do
+      for prefix <- ["public", "legal_alt"] do
+        actual = Enum.map(Migrations.up_statements(prefix), &operation/1)
+
+        assert Enum.sort(actual) == Enum.sort(@up_operations),
+               """
+               up_statements(#{inspect(prefix)}) does not emit the expected set of
+               operations.
+
+               unexpected: #{inspect(Enum.sort(actual) -- Enum.sort(@up_operations))}
+               missing:    #{inspect(Enum.sort(@up_operations) -- Enum.sort(actual))}
+
+               Every statement this chain emits runs against a table core created
+               and whose rows are a GDPR/CCPA consent audit trail. Adding one is a
+               chain version (V2+) and belongs in the extraction report's protocol;
+               it is not something to slip past this list.
+               """
+      end
+    end
+
+    # `{verb, object}` for one statement. The DO block is identified by the
+    # constraint it adds, since its verb says nothing about its target.
+    defp operation(statement) do
+      normalized = statement |> String.replace(~r/\s+/, " ") |> String.trim()
+
+      if String.starts_with?(normalized, "DO ") do
+        [_, constraint] = Regex.run(~r/ADD CONSTRAINT (\w+)/, normalized)
+        {"DO", constraint}
+      else
+        [_, verb, object] =
+          Regex.run(
+            ~r/^(CREATE UNIQUE INDEX|CREATE INDEX|CREATE TABLE|COMMENT ON TABLE|DROP TABLE|DROP INDEX|TRUNCATE|DELETE FROM|ALTER TABLE)(?: IF NOT EXISTS)? (?:\w+\.)?(\w+)/,
+            normalized
+          )
+
+        {verb, object}
+      end
     end
   end
 
