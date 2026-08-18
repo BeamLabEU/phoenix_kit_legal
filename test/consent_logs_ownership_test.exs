@@ -127,10 +127,35 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
 
   describe "the chain can never destroy the audit trail" do
     test "no statement in either direction matches DROP or TRUNCATE" do
-      all =
-        Migrations.up_statements() ++
-          Migrations.down_statements("public", 0) ++
-          Migrations.down_statements("public", 1)
+      # Enumerated by hand, so the enumeration is what has to be defended. An
+      # empty statement list satisfies "nothing destructive" trivially and
+      # leaves every direction unexercised: `refute` over zero elements is a
+      # green test that inspected nothing. Reproduced by emptying both
+      # builders — this test stayed green while five others reddened.
+      #
+      # `0` and `1` are both branches of `down_statements/2` (target zero
+      # unstamps, positive restamps), and a non-public prefix is included
+      # because the prefix is interpolated into every statement.
+      directions = [
+        {"up", Migrations.up_statements()},
+        {"up (prefixed)", Migrations.up_statements("legal_alt")},
+        {"down to 0", Migrations.down_statements("public", 0)},
+        {"down to 1", Migrations.down_statements("public", 1)},
+        {"down to 1 (prefixed)", Migrations.down_statements("legal_alt", 1)}
+      ]
+
+      for {label, statements} <- directions do
+        refute statements == [],
+               """
+               #{label} produced no statements.
+
+               An empty direction passes the destructiveness check by having
+               nothing to check. Whatever emptied it, fix that — do not let the
+               direction fall out of this test.
+               """
+      end
+
+      all = Enum.flat_map(directions, fn {_label, statements} -> statements end)
 
       for stmt <- all do
         refute stmt =~ ~r/\b(DROP|TRUNCATE|DELETE)\b/i,
