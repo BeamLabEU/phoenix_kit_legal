@@ -33,8 +33,14 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
   alias PhoenixKit.Modules.Legal.Gettext, as: LegalGettext
 
   setup do
-    original = Gettext.get_locale(LegalGettext)
-    on_exit(fn -> Gettext.put_locale(LegalGettext, original) end)
+    original_backend = Gettext.get_locale(LegalGettext)
+    original_global = Gettext.get_locale()
+
+    on_exit(fn ->
+      Gettext.put_locale(LegalGettext, original_backend)
+      Gettext.put_locale(original_global)
+    end)
+
     :ok
   end
 
@@ -102,7 +108,22 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
     @describetag :requires_phoenix_kit_i18n_api
 
     test "every tab carries the module's own gettext backend" do
-      for tab <- Legal.settings_tabs() do
+      tabs = Legal.settings_tabs()
+
+      # `for` over an empty list asserts nothing. Reproduced by emptying
+      # `settings_tabs/0`: the three locale tests below reddened (their
+      # `Enum.find/2` returns nil) and this one stayed green, reporting that
+      # every tab was wired correctly because there were no tabs.
+      #
+      # Anchored on the tab this module is known to register rather than on a
+      # count, so adding a second tab does not need a number changed here — and
+      # so a rename of the existing one is a failure rather than a silent skip.
+      assert Enum.any?(tabs, &(&1.id == :admin_settings_legal)),
+             "settings_tabs/0 no longer registers :admin_settings_legal " <>
+               "(got #{inspect(Enum.map(tabs, & &1.id))}) — every assertion below " <>
+               "iterates that list and passes trivially when it is empty"
+
+      for tab <- tabs do
         assert tab.gettext_backend == LegalGettext,
                "Tab #{inspect(tab.id)} is missing or wrong gettext_backend " <>
                  "(got #{inspect(tab.gettext_backend)})"
@@ -120,6 +141,36 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
 
     test "et locale resolves 'Legal' to 'Õigusdokumendid'" do
       Gettext.put_locale(LegalGettext, "et")
+
+      tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
+      assert Tab.localized_label(tab) == "Õigusdokumendid"
+    end
+
+    # Every other test here sets the locale on this module's backend. The
+    # application does not: core sets it globally and, separately, on
+    # `PhoenixKitWeb.Gettext` (`phoenix_kit/lib/phoenix_kit_web/users/auth.ex`
+    # around the `put_locale` calls). The global locale does reach this backend
+    # — but only while the backend has none of its own, and a backend-scoped
+    # locale WINS over the global one:
+    #
+    #     put_locale(LegalGettext, "en"); put_locale("ru")
+    #     #=> get_locale(LegalGettext) == "en", label == "Legal"
+    #
+    # So the backend-scoped tests force the strongest scope there is and always
+    # get their translation, while the scope the application actually uses went
+    # unexercised. Anything that leaves a locale on this backend in the same
+    # process — a future `put_locale(LegalGettext, ...)` added here or upstream,
+    # mirroring what core already does for its own backend — would leave the tab
+    # English in a Russian UI with all eight translation tests still green.
+    test "the locale the application sets — global, not backend-scoped — reaches the tab" do
+      Gettext.put_locale("ru")
+
+      tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
+      assert Tab.localized_label(tab) == "Юридические документы"
+    end
+
+    test "global locale reaches the tab for et as well" do
+      Gettext.put_locale("et")
 
       tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
       assert Tab.localized_label(tab) == "Õigusdokumendid"

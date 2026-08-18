@@ -117,8 +117,28 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     end
 
     test "every up statement is guarded (IF NOT EXISTS / DO-block idempotence)" do
-      # V1 runs on installs where core's V135 already created everything.
-      for stmt <- Migrations.up_statements(), not String.starts_with?(stmt, "COMMENT") do
+      # V1 runs on installs where core's V135 already created everything, so
+      # every statement must be a no-op against an object that is already there.
+      #
+      # The filter below is what made this vacuous: degrade `up_statements/1` to
+      # just its COMMENT and the loop runs zero times. Reproduced — three other
+      # tests caught that degradation and this one stayed green. So the set is
+      # asserted before it is iterated.
+      #
+      # No non-emptiness assertion here, deliberately, and this is the second
+      # lesson rather than the first. `up_statements/1` is a single list literal
+      # of nine elements — no branch, no filter — so it has no path that returns
+      # an empty list, and `refute ddl == []` could never have gone red without
+      # someone editing the builder itself. A guard on an unreachable state reads
+      # as protection and is a lock on a door nobody opens.
+      #
+      # Emptiness is now covered where it is reachable as a real regression:
+      # `up/1 emits exactly these operations and no others` compares the whole
+      # set, so statements disappearing fails there — measured, this test stays
+      # green under an emptied builder and that one reddens.
+      ddl = Enum.reject(Migrations.up_statements(), &String.starts_with?(&1, "COMMENT"))
+
+      for stmt <- ddl do
         assert stmt =~ "IF NOT EXISTS",
                "statement is not idempotent against a core-created table:\n#{stmt}"
       end
@@ -126,31 +146,144 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
   end
 
   describe "the chain can never destroy the audit trail" do
-    test "no statement in either direction matches DROP or TRUNCATE" do
-      all =
-        Migrations.up_statements() ++
-          Migrations.down_statements("public", 0) ++
-          Migrations.down_statements("public", 1)
-
-      for stmt <- all do
-        refute stmt =~ ~r/\b(DROP|TRUNCATE|DELETE)\b/i,
-               """
-               A chain statement can destroy phoenix_kit_consent_logs:
-
-               #{stmt}
-
-               The table is a GDPR/CCPA consent audit trail and on most installs
-               it is core-created. down/1 unstamps the marker; nothing more.
-               """
-      end
-    end
-
-    test "down to 0 removes the marker; down to a version restamps it" do
+    # Compared against the WHOLE expected content, not scanned for a forbidden
+    # substring. Three reasons, all learned the hard way:
+    #
+    #   * A substring check only sees statements the builder produced. Anything
+    #     appended past it — a literal `execute("DROP TABLE ...")` in `up/1` —
+    #     is invisible to it. (That path is closed by the test below this
+    #     describe block, which checks what is executed rather than what is
+    #     built.)
+    #   * One surviving harmless statement satisfies both "not empty" and "no
+    #     DROP" at once, so those two assertions together still allow every
+    #     other statement to vanish.
+    #   * Requiring the list to be non-empty forbids the safest legitimate
+    #     outcome. Core created this table; V1 adopts it. A rollback that does
+    #     nothing at all is correct here, and a test that demands rollback
+    #     "do something" pushes the next maintainer exactly where not touching
+    #     is safer. Under equality an empty rollback is an expected value to
+    #     write down, not a violation to work around.
+    #
+    # For `down/1` the expected content is the full statement text: two lines,
+    # so exactness is cheap and total.
+    test "down/1 emits exactly the marker bookkeeping, in every target and prefix" do
       assert Migrations.down_statements("public", 0) ==
                ["COMMENT ON TABLE public.phoenix_kit_consent_logs IS NULL"]
 
       assert Migrations.down_statements("public", 1) ==
                ["COMMENT ON TABLE public.phoenix_kit_consent_logs IS 'pkl_schema:1'"]
+
+      assert Migrations.down_statements("legal_alt", 0) ==
+               ["COMMENT ON TABLE legal_alt.phoenix_kit_consent_logs IS NULL"]
+
+      assert Migrations.down_statements("legal_alt", 2) ==
+               ["COMMENT ON TABLE legal_alt.phoenix_kit_consent_logs IS 'pkl_schema:2'"]
+    end
+
+    # For `up/1` the expected content is the full set of OPERATIONS rather than
+    # the full SQL text. Pasting nine statements here would put a second copy of
+    # the DDL in the test suite, which is the defect this module spent 0.3.0
+    # unwinding. An operation is `{verb, object}`, which is immune to
+    # reformatting and still fails on any statement added, removed or retargeted
+    # — including a destructive one, which cannot enter this set without
+    # changing it.
+    @up_operations [
+      {"CREATE TABLE", "phoenix_kit_consent_logs"},
+      {"DO", "phoenix_kit_consent_logs_pkey"},
+      {"CREATE UNIQUE INDEX", "phoenix_kit_consent_logs_uuid_unique_index"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_inserted_at_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_session_id_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_session_type_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_type_idx"},
+      {"CREATE INDEX", "phoenix_kit_consent_logs_user_uuid_idx"},
+      {"COMMENT ON TABLE", "phoenix_kit_consent_logs"}
+    ]
+
+    test "up/1 emits exactly these operations and no others" do
+      for prefix <- ["public", "legal_alt"] do
+        actual = Enum.map(Migrations.up_statements(prefix), &operation/1)
+
+        assert Enum.sort(actual) == Enum.sort(@up_operations),
+               """
+               up_statements(#{inspect(prefix)}) does not emit the expected set of
+               operations.
+
+               unexpected: #{inspect(Enum.sort(actual) -- Enum.sort(@up_operations))}
+               missing:    #{inspect(Enum.sort(@up_operations) -- Enum.sort(actual))}
+
+               Every statement this chain emits runs against a table core created
+               and whose rows are a GDPR/CCPA consent audit trail. Adding one is a
+               chain version (V2+) and belongs in the extraction report's protocol;
+               it is not something to slip past this list.
+               """
+      end
+    end
+
+    # `{verb, object}` for one statement. The DO block is identified by the
+    # constraint it adds, since its verb says nothing about its target.
+    defp operation(statement) do
+      normalized = statement |> String.replace(~r/\s+/, " ") |> String.trim()
+
+      if String.starts_with?(normalized, "DO ") do
+        [_, constraint] = Regex.run(~r/ADD CONSTRAINT (\w+)/, normalized)
+        {"DO", constraint}
+      else
+        [_, verb, object] =
+          Regex.run(
+            ~r/^(CREATE UNIQUE INDEX|CREATE INDEX|CREATE TABLE|COMMENT ON TABLE|DROP TABLE|DROP INDEX|TRUNCATE|DELETE FROM|ALTER TABLE)(?: IF NOT EXISTS)? (?:\w+\.)?(\w+)/,
+            normalized
+          )
+
+        {verb, object}
+      end
+    end
+  end
+
+  describe "what reaches the database is what the tests above inspect" do
+    # The tests above read `up_statements/1` and `down_statements/2`. The database
+    # gets `up/1` and `down/1`. Nothing connected the two, so a literal
+    # `execute("DROP TABLE ...")` written straight into `up/1` would have passed
+    # every one of them — the guard was watching the data while the function did
+    # the work.
+    #
+    # Checked against the source text, because this suite has no repo and cannot
+    # run a migration. That pins the shape of the implementation, not just its
+    # behaviour: rewriting `up/1` as a comprehension would fail this test even
+    # though it still only executed the builder. That is the price of checking it
+    # at all here, and it is the cheaper half of the trade — the alternative is
+    # no check on the executed path.
+    @source "lib/phoenix_kit_legal/migrations.ex"
+
+    test "neither direction executes SQL of its own" do
+      source = File.read!(@source)
+
+      refute source =~ ~r/execute\(/,
+             """
+             #{@source} calls execute/1 with an argument of its own.
+
+             Every statement this chain runs must come from up_statements/1 or
+             down_statements/2, because those are what the tests above compare
+             against their expected content. A statement executed directly is
+             invisible to all of them — and this table's rows are a GDPR/CCPA
+             consent audit trail.
+             """
+
+      assert length(Regex.scan(~r/&execute\/1/, source)) == 2,
+             "expected exactly two `&execute/1` references — one per direction — " <>
+               "in #{@source}"
+    end
+
+    test "each direction executes its own builder" do
+      source = File.read!(@source)
+
+      assert source =~ ~r/up_statements\(\)\s*\|>\s*Enum\.each\(&execute\/1\)/,
+             "up/1 no longer pipes up_statements/1 into execute/1 — whatever it " <>
+               "runs instead is not what `up/1 emits exactly these operations` checks"
+
+      assert source =~ ~r/down_statements\(target\)\s*\|>\s*Enum\.each\(&execute\/1\)/,
+             "down/1 no longer pipes down_statements/2 into execute/1 — whatever it " <>
+               "runs instead is not what `down/1 emits exactly the marker " <>
+               "bookkeeping` checks"
     end
   end
 
@@ -160,6 +293,24 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     # `mix phoenix_kit.update` (which discovers the chain) — never by copying
     # DDL by hand.
     priv = :code.priv_dir(:phoenix_kit_legal) |> to_string()
+
+    # A glob over a path that does not resolve returns [], which satisfies the
+    # assertion below without looking at anything. Reproduced by pointing `priv`
+    # at a nonexistent directory: 16 tests, 0 failures. So the location is
+    # proved before its emptiness is claimed — `legal_templates/` is content
+    # this package definitely ships, and finding it means we are reading the
+    # real priv dir.
+    assert File.dir?(priv), "priv dir did not resolve: #{inspect(priv)}"
+
+    assert Path.wildcard(Path.join([priv, "legal_templates", "*.eex"])) != [],
+           """
+           No templates found under #{priv}/legal_templates.
+
+           This package ships them, so their absence means this test is reading
+           the wrong directory — and the assertion below would then report "no
+           migration templates" about a place that holds none of anything.
+           """
+
     stray = Path.wildcard(Path.join([priv, "migrations", "*.exs"]))
 
     assert stray == [],
@@ -172,6 +323,15 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
   end
 
   describe "ConsentLog changeset guards the declared column widths" do
+    # These assert Ecto's error METADATA, not its message text. The metadata
+    # carries the limit — `[count: 64, validation: :length, kind: :max]` — so it
+    # pins the number the column actually has; the human string does not mention
+    # it, and changes when Ecto rewords, which would break these tests without
+    # any behaviour changing. A test that fails on a reformulation and passes on
+    # a changed limit is pinning the wrong thing.
+    #
+    # The limits come from `column_widths/0` rather than being written out, so
+    # widening a column cannot leave these two disagreeing with it.
     test "rejects a session_id longer than varchar(64)" do
       changeset =
         ConsentLog.changeset(%ConsentLog{}, %{
@@ -180,7 +340,10 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
         })
 
       refute changeset.valid?
-      assert {"should be at most %{count} character(s)", _} = changeset.errors[:session_id]
+      assert {_message, meta} = changeset.errors[:session_id]
+      assert meta[:validation] == :length
+      assert meta[:kind] == :max
+      assert meta[:count] == ConsentLog.column_widths().session_id
     end
 
     test "rejects a consent_version longer than varchar(20)" do
@@ -192,7 +355,10 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
         })
 
       refute changeset.valid?
-      assert {"should be at most %{count} character(s)", _} = changeset.errors[:consent_version]
+      assert {_message, meta} = changeset.errors[:consent_version]
+      assert meta[:validation] == :length
+      assert meta[:kind] == :max
+      assert meta[:count] == ConsentLog.column_widths().consent_version
     end
 
     test "accepts values at exactly the limits" do
@@ -231,6 +397,21 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     # naming the table. `core_columns/0` is what decides that, and the widths
     # are derived from the same map, so both sides are keyed by bare column
     # name and there is one parse to break instead of two drifting ones.
+    #
+    # Two residues of that choice, named so the next reader does not have to
+    # rediscover them:
+    #
+    #   * If `core_columns/0` itself returns nothing — core renames the object
+    #     id format, say — this test passes empty, because every field is then
+    #     legitimately "not declared". The guard in that case is
+    #     `every column core declares matches V1's, in full`, which reads the
+    #     same map and asserts set equality with V1's own columns, so an empty
+    #     core side fails there. One shared source is why that works; it is
+    #     also why this test cannot be the one to catch it.
+    #   * A field in `column_widths/0` whose name does not match its column
+    #     name would drop out of the comparison silently. They are one-to-one
+    #     today, so this is theoretical — but the mapping is `Atom.to_string/1`
+    #     and nothing asserts it.
     test "every width core declares is the width this package declares" do
       core = core_columns()
       widths = core_varchar_widths()
