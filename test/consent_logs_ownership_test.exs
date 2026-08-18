@@ -233,6 +233,15 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
   end
 
   describe "ConsentLog changeset guards the declared column widths" do
+    # These assert Ecto's error METADATA, not its message text. The metadata
+    # carries the limit — `[count: 64, validation: :length, kind: :max]` — so it
+    # pins the number the column actually has; the human string does not mention
+    # it, and changes when Ecto rewords, which would break these tests without
+    # any behaviour changing. A test that fails on a reformulation and passes on
+    # a changed limit is pinning the wrong thing.
+    #
+    # The limits come from `column_widths/0` rather than being written out, so
+    # widening a column cannot leave these two disagreeing with it.
     test "rejects a session_id longer than varchar(64)" do
       changeset =
         ConsentLog.changeset(%ConsentLog{}, %{
@@ -241,7 +250,10 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
         })
 
       refute changeset.valid?
-      assert {"should be at most %{count} character(s)", _} = changeset.errors[:session_id]
+      assert {_message, meta} = changeset.errors[:session_id]
+      assert meta[:validation] == :length
+      assert meta[:kind] == :max
+      assert meta[:count] == ConsentLog.column_widths().session_id
     end
 
     test "rejects a consent_version longer than varchar(20)" do
@@ -253,7 +265,10 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
         })
 
       refute changeset.valid?
-      assert {"should be at most %{count} character(s)", _} = changeset.errors[:consent_version]
+      assert {_message, meta} = changeset.errors[:consent_version]
+      assert meta[:validation] == :length
+      assert meta[:kind] == :max
+      assert meta[:count] == ConsentLog.column_widths().consent_version
     end
 
     test "accepts values at exactly the limits" do
