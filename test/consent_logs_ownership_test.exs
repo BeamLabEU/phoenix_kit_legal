@@ -117,8 +117,26 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     end
 
     test "every up statement is guarded (IF NOT EXISTS / DO-block idempotence)" do
-      # V1 runs on installs where core's V135 already created everything.
-      for stmt <- Migrations.up_statements(), not String.starts_with?(stmt, "COMMENT") do
+      # V1 runs on installs where core's V135 already created everything, so
+      # every statement must be a no-op against an object that is already there.
+      #
+      # The filter below is what made this vacuous: degrade `up_statements/1` to
+      # just its COMMENT and the loop runs zero times. Reproduced — three other
+      # tests caught that degradation and this one stayed green. So the set is
+      # asserted before it is iterated.
+      #
+      # Only total emptiness is defended here on purpose. A statement list that
+      # shrank without emptying is caught by `V1 uses core's exact object
+      # names`, which requires all seven of them; restating that count here
+      # would be a second copy of the same invariant.
+      ddl = Enum.reject(Migrations.up_statements(), &String.starts_with?(&1, "COMMENT"))
+
+      refute ddl == [],
+             "up_statements/1 emitted no DDL at all — there is nothing here to " <>
+               "call idempotent, and without this assertion the test passes " <>
+               "having inspected nothing"
+
+      for stmt <- ddl do
         assert stmt =~ "IF NOT EXISTS",
                "statement is not idempotent against a core-created table:\n#{stmt}"
       end
