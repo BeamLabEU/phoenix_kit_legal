@@ -203,6 +203,24 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     # `mix phoenix_kit.update` (which discovers the chain) — never by copying
     # DDL by hand.
     priv = :code.priv_dir(:phoenix_kit_legal) |> to_string()
+
+    # A glob over a path that does not resolve returns [], which satisfies the
+    # assertion below without looking at anything. Reproduced by pointing `priv`
+    # at a nonexistent directory: 16 tests, 0 failures. So the location is
+    # proved before its emptiness is claimed — `legal_templates/` is content
+    # this package definitely ships, and finding it means we are reading the
+    # real priv dir.
+    assert File.dir?(priv), "priv dir did not resolve: #{inspect(priv)}"
+
+    assert Path.wildcard(Path.join([priv, "legal_templates", "*.eex"])) != [],
+           """
+           No templates found under #{priv}/legal_templates.
+
+           This package ships them, so their absence means this test is reading
+           the wrong directory — and the assertion below would then report "no
+           migration templates" about a place that holds none of anything.
+           """
+
     stray = Path.wildcard(Path.join([priv, "migrations", "*.exs"]))
 
     assert stray == [],
