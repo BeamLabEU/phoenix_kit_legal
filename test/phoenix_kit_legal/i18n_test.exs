@@ -102,7 +102,22 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
     @describetag :requires_phoenix_kit_i18n_api
 
     test "every tab carries the module's own gettext backend" do
-      for tab <- Legal.settings_tabs() do
+      tabs = Legal.settings_tabs()
+
+      # `for` over an empty list asserts nothing. Reproduced by emptying
+      # `settings_tabs/0`: the three locale tests below reddened (their
+      # `Enum.find/2` returns nil) and this one stayed green, reporting that
+      # every tab was wired correctly because there were no tabs.
+      #
+      # Anchored on the tab this module is known to register rather than on a
+      # count, so adding a second tab does not need a number changed here — and
+      # so a rename of the existing one is a failure rather than a silent skip.
+      assert Enum.any?(tabs, &(&1.id == :admin_settings_legal)),
+             "settings_tabs/0 no longer registers :admin_settings_legal " <>
+               "(got #{inspect(Enum.map(tabs, & &1.id))}) — every assertion below " <>
+               "iterates that list and passes trivially when it is empty"
+
+      for tab <- tabs do
         assert tab.gettext_backend == LegalGettext,
                "Tab #{inspect(tab.id)} is missing or wrong gettext_backend " <>
                  "(got #{inspect(tab.gettext_backend)})"
