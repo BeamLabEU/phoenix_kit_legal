@@ -237,6 +237,54 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     end
   end
 
+  describe "what reaches the database is what the tests above inspect" do
+    # The tests above read `up_statements/1` and `down_statements/2`. The database
+    # gets `up/1` and `down/1`. Nothing connected the two, so a literal
+    # `execute("DROP TABLE ...")` written straight into `up/1` would have passed
+    # every one of them — the guard was watching the data while the function did
+    # the work.
+    #
+    # Checked against the source text, because this suite has no repo and cannot
+    # run a migration. That pins the shape of the implementation, not just its
+    # behaviour: rewriting `up/1` as a comprehension would fail this test even
+    # though it still only executed the builder. That is the price of checking it
+    # at all here, and it is the cheaper half of the trade — the alternative is
+    # no check on the executed path.
+    @source "lib/phoenix_kit_legal/migrations.ex"
+
+    test "neither direction executes SQL of its own" do
+      source = File.read!(@source)
+
+      refute source =~ ~r/execute\(/,
+             """
+             #{@source} calls execute/1 with an argument of its own.
+
+             Every statement this chain runs must come from up_statements/1 or
+             down_statements/2, because those are what the tests above compare
+             against their expected content. A statement executed directly is
+             invisible to all of them — and this table's rows are a GDPR/CCPA
+             consent audit trail.
+             """
+
+      assert length(Regex.scan(~r/&execute\/1/, source)) == 2,
+             "expected exactly two `&execute/1` references — one per direction — " <>
+               "in #{@source}"
+    end
+
+    test "each direction executes its own builder" do
+      source = File.read!(@source)
+
+      assert source =~ ~r/up_statements\(\)\s*\|>\s*Enum\.each\(&execute\/1\)/,
+             "up/1 no longer pipes up_statements/1 into execute/1 — whatever it " <>
+               "runs instead is not what `up/1 emits exactly these operations` checks"
+
+      assert source =~ ~r/down_statements\(target\)\s*\|>\s*Enum\.each\(&execute\/1\)/,
+             "down/1 no longer pipes down_statements/2 into execute/1 — whatever it " <>
+               "runs instead is not what `down/1 emits exactly the marker " <>
+               "bookkeeping` checks"
+    end
+  end
+
   test "no migration template is shipped in priv/" do
     # `priv/migrations/add_phoenix_kit_consent_logs.exs` was a copy-into-your-app
     # template the README pointed at, deleted in 0.3.0. Hosts migrate through
