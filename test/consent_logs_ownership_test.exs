@@ -125,16 +125,18 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
       # tests caught that degradation and this one stayed green. So the set is
       # asserted before it is iterated.
       #
-      # Only total emptiness is defended here on purpose. A statement list that
-      # shrank without emptying is caught by `V1 uses core's exact object
-      # names`, which requires all seven of them; restating that count here
-      # would be a second copy of the same invariant.
+      # No non-emptiness assertion here, deliberately, and this is the second
+      # lesson rather than the first. `up_statements/1` is a single list literal
+      # of nine elements — no branch, no filter — so it has no path that returns
+      # an empty list, and `refute ddl == []` could never have gone red without
+      # someone editing the builder itself. A guard on an unreachable state reads
+      # as protection and is a lock on a door nobody opens.
+      #
+      # Emptiness is now covered where it is reachable as a real regression:
+      # `up/1 emits exactly these operations and no others` compares the whole
+      # set, so statements disappearing fails there — measured, this test stays
+      # green under an emptied builder and that one reddens.
       ddl = Enum.reject(Migrations.up_statements(), &String.starts_with?(&1, "COMMENT"))
-
-      refute ddl == [],
-             "up_statements/1 emitted no DDL at all — there is nothing here to " <>
-               "call idempotent, and without this assertion the test passes " <>
-               "having inspected nothing"
 
       for stmt <- ddl do
         assert stmt =~ "IF NOT EXISTS",
