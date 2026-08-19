@@ -2,6 +2,44 @@
 
 This file provides guidance to AI agents working with code in this repository.
 
+## ⚠️ This module owns the shape of one core-created table
+
+`phoenix_kit_consent_logs` is created by core's migration chain (V43, now folded
+into the squashed V135 baseline), so it exists on every PhoenixKit install, with or
+without this package. Core 2.0's `PhoenixKit.Migrations.ExpectedSchema` still names
+the table, all 11 columns, 6 indexes and the pkey as core-owned, and that manifest
+is what `mix phoenix_kit.doctor` and `mix phoenix_kit.repair` verify live databases
+against.
+
+Since 0.4.0 this package owns the table's **future** shape, through
+`PhoenixKit.Modules.Legal.Migrations` — returned by `migration_module/0`
+(`legal.ex:871`). V1 of that chain is an *adoption*, not a create: `CREATE TABLE IF
+NOT EXISTS` with core's exact object names, then a `pkl_schema:1` comment marker. It
+changes no shape, which is why core's manifest stays accurate and no core release
+was required. Rationale and the per-audience upgrade paths:
+`dev_docs/reports/2026-08-10-consent-logs-extraction.md`.
+
+What the chain must never do — each pinned by `test/consent_logs_ownership_test.exs`:
+
+- **Never restate a column width.** Every varchar width in the DDL is interpolated
+  from `ConsentLog.column_widths/0`, this package's single width authority. Three
+  separate DDLs for this one table had accumulated by 2026-08-10 — core's, a
+  coordinator here, and a copy-into-your-app template the README pointed at — all
+  disagreeing on widths and index names
+  (`dev_docs/reports/2026-08-10-module-migration-versioning.md`). A second copy of
+  those numbers is how that happened.
+- **Never ship a migration template under `priv/`.** Hosts migrate through
+  `mix phoenix_kit.update`, which discovers the chain and writes the wrapper itself.
+- **Never emit `DROP`, `TRUNCATE` or `DELETE`.** The rows are a GDPR/CCPA consent
+  audit trail, and on every current install the table is core-created; `down/1`
+  unstamps the marker and does nothing else.
+
+Changing the table's shape is a chain version (V2+), and it is **not** a
+free-standing change: it must follow the excluded-object protocol in the extraction
+report, because core's manifest audits the V135 shape until core's generated
+baseline excludes the altered objects. A width change that skips that step should
+fail review.
+
 ## Project Overview
 
 PhoenixKit Legal — a legal compliance module for the PhoenixKit framework providing GDPR/CCPA/LGPD/PIPEDA compliant legal page generation, a cookie consent widget with Google Consent Mode v2, and consent audit logging. Implements the `PhoenixKit.Module` behaviour for auto-discovery by a parent Phoenix application. Legal pages are stored via the Publishing module.
@@ -82,6 +120,31 @@ Consequences to keep in mind when changing page-generation code:
   shape; it must stay in sync with Publishing's dispatch, and the cookie consent
   widget shows those links to every visitor
 - Renaming `@legal_blog_slug` changes public URLs and breaks existing inbound links
+- `list_generated_pages/0` reads the page timestamp from Publishing's
+  **top-level** `:content_updated_at`, not from `:metadata`. Publishing's
+  `:metadata` map has never had an `:updated_at` key, and reading only that key
+  made the field permanently `nil` — with it `get_auto_policy_version/0`
+  permanently returned the manual setting, so editing a policy page never bumped
+  the consent version and no visitor was ever re-prompted. `test/phoenix_kit_legal/policy_version_test.exs`
+  asserts the key against Publishing's own mapper
+
+### Policy Version Contract
+
+`get_auto_policy_version/0` → `get_consent_widget_config/0` → the widget →
+`phoenix_kit_consent_logs.consent_version`, core's `varchar(20)`. Every producer
+on that chain is bounded by `ConsentLog.column_widths/0`, and an unbounded value
+anywhere on it is an audit-trail outage: the setting is accepted, and every
+consent write afterwards fails validation, far from the change that caused it.
+
+Count **code points**, not `String.length/1`'s graphemes — that is the unit
+Postgres counts for `varchar(n)`, and the two differ on combining marks and ZWJ
+sequences (20 graphemes of `"é"` is 40 code points). This applies equally to
+`validate_length/3`, whose default is graphemes; `validate_column_widths/1`
+passes `count: :codepoints`.
+
+`format_version_date/1` falls back to `get_policy_version/0` on an unparseable
+timestamp rather than returning it verbatim — an offset-less ISO8601 string with
+microseconds is 26 characters.
 
 ### Consent Config Endpoint Contract
 
@@ -105,78 +168,26 @@ every request raises `UndefinedFunctionError`, a 500 per page load, since core's
 bundled `phoenix_kit.js` fetches the endpoint on `DOMContentLoaded` whenever the
 widget root was not server-rendered. Nothing catches it at compile time: Phoenix
 compiles routes to literal tuples, so a missing controller produces no warning.
-Hence the `>= 1.7.227` half of the `phoenix_kit` requirement in `mix.exs` —
-floored in the same release that shipped the deletion, and it must stay floored.
+Hence `{:phoenix_kit, "~> 1.7.227"}` in `mix.exs` — floored in the same release
+that shipped the deletion, and it must stay floored.
 
-### Core Version Compatibility
+### Tailwind `css_sources/0` Contract
 
-The requirement is `{:phoenix_kit, ">= 1.7.227 and < 3.0.0"}`, not `~> 1.7.227`.
-The tilde would cap at `< 1.8.0` and lock this module out of the resolver the day
-core cuts 1.8, for no reason: the core surface used here is the
-`PhoenixKit.Module` behaviour, `PhoenixKit.Settings`, `PhoenixKit.Dashboard.Tab`,
-`PhoenixKit.SchemaPrefix`, `PhoenixKit.Utils.Routes`, `PhoenixKit.Cache` and
-`PhoenixKit.Migrations.Postgres` — none of it 1.7-specific.
+`css_sources/0` (`legal.ex`) returns the absolute `@source_root` **only** when
+the `:phoenix_kit_legal` atom entry doesn't already cover it. Do not simplify it
+back to `[:phoenix_kit_legal, @source_root]`.
 
-Two things this does *not* mean:
+`Mix.Tasks.Compile.PhoenixKitCssSources` in core calls `Enum.uniq/1` on the raw
+callback results — an atom and a path string, never equal — and formats them
+into `@source` lines afterwards, so returning both unconditionally wrote the
+same directory twice into the host's `assets/css/_phoenix_kit_sources.css`, once
+relative and once as a build-machine absolute path. Legal was the only module
+returning an absolute root; Publishing and AI return just the atom.
 
-- **A range is permission to resolve, not a tested claim.** When core ships 1.8
-  or 2.0, run the suite against it before advertising support; a major may drop
-  or rename any API in that list. `< 3.0.0` exists so the next major after this
-  is a decision instead of an inheritance.
-- **Sibling modules can still cap core below 1.8.** `phoenix_kit_publishing`
-  0.4.5 requires `{:phoenix_kit, "~> 1.7.189"}`, so any host installing both
-  resolves core `< 1.8.0` regardless of what this module allows. Widening here is
-  necessary for a core minor/major bump but not sufficient — the sibling
-  requirements have to widen too.
-
-Optional core APIs are detected, not assumed. `test/test_helper.exs` uses
-`Code.ensure_loaded?` + `function_exported?` to skip the i18n tests when the
-resolved core predates `Tab.localized_label/1`, so they re-enable on upgrade
-instead of failing on an older core. Prefer that shape over a version compare
-when reaching for a newly added core function.
-
-### Module Migrations
-
-This module owns the DDL for its own table. It is **not** added as a new `Vxxx` to
-core's migration chain — that would tie this schema to a core release and grow the
-core package for hosts that never install Legal.
-
-`PhoenixKit.Modules.Legal.Migrations.ConsentLogs` implements the protocol
-`mix phoenix_kit.update` calls: `current_version/0`, `migrated_version/1`
-(migration context), `migrated_version_runtime/1` (Mix-task context), `up/1`,
-`down/1`. Core reads the two version functions, and when the database is behind it
-writes a migration into the *host* app that calls back into `up/1`. Hosts never
-hand-write SQL for this table and this package ships no install task.
-
-Rules, each of which this module got wrong before 2026-08-10 — see
-`dev_docs/reports/2026-08-10-module-migration-versioning.md`:
-
-- **The version is stored in the table's `COMMENT`, never inferred from the table
-  existing.** Existence distinguishes 0 from non-zero and nothing more, so an
-  existence check reports "current" for every version and silently skips deltas.
-- **Reading it tolerates prose.** Core's V43 created this table with a descriptive
-  comment; `Integer.parse/1` plus a fallback to V1 handles that. `String.to_integer/1`
-  raises, and a raise inside the runtime reader becomes "not installed".
-- **A reader that cannot answer must not answer 0.** An invalid prefix re-raises.
-- **`down(version: N)` returns to N.** Only `version: 0` drops the table. This one
-  is a data-loss rule: the table is the consent audit trail.
-- **Version steps are immutable once shipped.** `up_v1/1` was rewritten in 0.1.11
-  only because it was provably unreachable — core's V43 creates the table long
-  before any supported core release, so no host had ever run it. That argument does
-  not extend to `up_v2/1`.
-- **Assume nothing about core's chain having run.** `Helpers.ensure_extension!/1`,
-  `ensure_uuid_v7_function/1` and `uuid_v7_call/1` before touching uuid defaults;
-  `prefix:` on everything; bare index names on `CREATE`.
-
-The ExUnit suite runs without a repo, so it pins only the protocol shape and the
-prefix-raises behaviour. The DDL is verified against a real Postgres by:
-
-```bash
-mix run test/scripts/verify_consent_logs_migration.exs
-```
-
-It builds its own scratch database, replays both V1 shapes, and checks the
-convergence, rollback and named-schema cases. Run it after touching the migration.
+The absolute entry still has to exist for `{:phoenix_kit_legal, path: "..."}`
+installs, where `../../deps/phoenix_kit_legal` doesn't resolve — hence the
+condition rather than a deletion. `test/phoenix_kit_legal/css_sources_test.exs`
+guards both directions.
 
 ### Compliance Frameworks (7 total)
 
@@ -192,7 +203,10 @@ convergence, rollback and named-schema cases. Run it after touching the migratio
 
 ### Database Table
 
-**`phoenix_kit_consent_logs`** — Consent audit trail (UUIDv7 PK)
+**`phoenix_kit_consent_logs`** — consent audit trail (UUIDv7 PK). **Core's table, not
+this package's** — see the warning at the top of this file. This package reads and
+writes it and ships no DDL for it; the only table it touches, and it owns none.
+Legal pages are stored in the Publishing module's tables.
 
 - `uuid` (UUIDv7), `user_uuid` (optional), `session_id` (optional) — identity
 - `consent_type` — "necessary", "analytics", "marketing", or "preferences"
@@ -202,13 +216,16 @@ convergence, rollback and named-schema cases. Run it after touching the migratio
 - `metadata` JSONB — extensible additional data
 - Requires either `user_uuid` or `session_id` (at least one)
 
-This is the only database table. Legal pages are stored in the Publishing module's tables.
+Core's `varchar` widths are declared once, in `ConsentLog.column_widths/0` (the
+numbers are listed in the warning at the top of this file). The changeset derives
+its length validations from that map and `Legal.update_policy_version/1` reads its
+limit from it — anything else that produces a value for one of these columns
+should read it too rather than restating the number. `test/consent_logs_ownership_test.exs`
+checks the map against core's `ExpectedSchema`, so a core change surfaces as a
+failing test rather than as silent drift.
 
-Its `COMMENT ON TABLE` holds the module's schema version as a bare integer — that is
-the version marker `mix phoenix_kit.update` reads, so the table's prose description
-(core V43 put one there) lives in this section instead. Schema version 2 widened
-`session_id` to 255, `consent_type` and `consent_version` to 50, made `metadata`
-non-null, and settled on core's `phoenix_kit_consent_logs_*_idx` index names.
+Writes go through `ConsentLog.changeset/2`; `log_consents/2` wraps the whole map in
+one transaction, so a rejected entry commits none of the others.
 
 ### Template System
 

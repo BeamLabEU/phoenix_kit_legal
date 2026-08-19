@@ -1,5 +1,301 @@
 # Changelog
 
+## 0.4.2 - 2026-08-18
+
+### Fixed
+
+- **daisyUI 5 form classes that styled nothing.** The DPO contact form in the
+  admin settings page (`web/settings.html.heex`) still used daisyUI 4's
+  `form-control` / `input-bordered` / `label-text` / `label-text-alt`, which v5
+  dropped — the classes did nothing and the fields lost their intended
+  spacing/border styling. Replaced with v5's `fieldset` / `input` /
+  `fieldset-legend` / `fieldset-label`.
+
+### Changed
+
+- Dependency updates: `phoenix_kit` 2.13.1, `phoenix_kit_publishing` 0.7.0, and
+  the transitive set they pull.
+- Hardened `test/consent_logs_ownership_test.exs`,
+  `test/schema_prefix_conformance_test.exs`, and
+  `test/phoenix_kit_legal/i18n_test.exs` against vacuous guards (#17, #18) —
+  several checks could not fail because the list or set they iterated could be
+  empty, or pinned Ecto's message text instead of its error metadata. No
+  behaviour change; not shipped in the package (`test/` is excluded from the
+  Hex `files:` list).
+
+## 0.4.1 - 2026-08-11
+
+### Changed
+
+- Dependency updates: `phoenix_kit` 2.2.0 and the transitive set it pulls
+  (`phoenix` 1.8.10, `hackney` 4.7.3). No source changes in this package.
+
+## 0.4.0 - 2026-08-11
+
+### Changed
+
+- **`phoenix_kit_consent_logs`' future shape now belongs to a module-owned
+  migration chain** (#16), `PhoenixKit.Modules.Legal.Migrations`, marker
+  `pkl_schema:<N>`. V1 is an **adoption, not a create**: core's V135 baseline
+  still creates the table on every install, and V1 re-asserts that exact shape
+  idempotently and stamps the marker. Because no shape changes, core's
+  `ExpectedSchema` stays accurate — **no core release is required and there is
+  no release-ordering hazard**.
+
+  This revisits the same-day 0.3.0/0.3.1 "core owns it" pin deliberately. That
+  cleanup killed two drifted in-package DDL copies and stands; this is the
+  extraction it made safe, with the drift class solved at the root —
+  `up_statements/1` interpolates `ConsentLog.column_widths/0` and there is no
+  second copy of those numbers anywhere in the package.
+
+  **`down/1` can never drop the table.** It unstamps the marker and nothing
+  else: the rows are a GDPR/CCPA consent audit trail and on most installs the
+  table is core-created. Test-pinned — no statement in either direction may
+  match `DROP`/`TRUNCATE`/`DELETE`.
+
+  Existing hosts: upgrade, then `mix phoenix_kit.update`; a wrapper migration
+  stamps `pkl_schema:1` and nothing else changes. New hosts and hosts without
+  Legal: unchanged.
+
+  The V2+ shape-change protocol (core's `@excluded_exact` + manifest
+  regeneration, then a core-floor bump here) is in
+  `dev_docs/reports/2026-08-10-consent-logs-extraction.md`.
+
+- Carries core's rustler escape hatch (`{:rustler, ">= 0.0.0", optional: true}`)
+  so MDEx's NIF builds from source on OTP versions shipping no compatible
+  precompiled NIF.
+
+### Added
+
+- The ownership test now cross-checks **every column** against core's manifest
+  — names, types, defaults and nullability — not only the varchar widths. A
+  width-only comparison passes while a type, a default or a `NOT NULL` drifts,
+  which is the same blind spot that produced three disagreeing DDLs in the
+  first place.
+
+## 0.3.2 - 2026-08-10
+
+### Fixed
+
+- **The consent policy version never changed, so no visitor was ever re-prompted
+  to consent after a policy update.** `list_generated_pages/0` read each page's
+  timestamp from `metadata.updated_at`, a key Publishing has never emitted — its
+  post map carries the content timestamp at the top level, as
+  `content_updated_at`. The field was therefore permanently `nil`, and
+  `get_auto_policy_version/0` permanently fell through to the manual
+  `legal_policy_version` setting, which the admin UI exposes no input for. The
+  version stayed at its `"1.0"` default for the life of the install, which is the
+  opposite of what versioning it is for.
+
+- **Column-width checks counted the wrong unit.** Postgres counts `varchar(n)` in
+  characters — code points — while `validate_length/3` and `String.length/1`
+  count graphemes. The two agree on ASCII and part ways on combining marks and
+  ZWJ sequences: 20 graphemes of `"é"` is 40 code points, which passed both the
+  changeset added in 0.3.0 and the producer guard added in 0.3.1, then came back
+  from Postgres as the raw `Postgrex.Error` varchar overflow those checks exist
+  to replace. `ConsentLog.create/1` is public API, so the caller had no way to
+  check first. `validate_column_widths/1` now passes `count: :codepoints`, and
+  `Legal.update_policy_version/1` counts `String.codepoints/1`.
+
+- **`format_version_date/1` could emit a version wider than the column.** It
+  returned an unparseable timestamp string verbatim, and its output becomes
+  `consent_version`. An offset-less ISO8601 string with microseconds
+  (`"2026-08-10T22:03:27.123456"`) does not parse and is 26 characters — over
+  core's `varchar(20)`, which would have rejected every consent write afterwards.
+  It now falls back to the width-guarded `get_policy_version/0`, matching the
+  catch-all clause.
+
+### Changed
+
+- `ConsentLog.log_consents/2` documents its behaviour inside a caller's
+  transaction. Ecto nests without a savepoint, so the rollback on a failed entry
+  aborts the caller's transaction too and the function does not return —
+  `{:error, errors}` surfaces from the outermost `transaction/1`. Callers that
+  need their own work to survive a failed consent write must run it outside their
+  transaction.
+
+- `ConsentLog.column_widths/0` states that its numbers are code points, since its
+  purpose is to be read by producers and a producer reading the right number in
+  the wrong unit is back to the drift the map was introduced to end.
+
+## 0.3.1 - 2026-08-10
+
+### Changed
+
+- **⚠️ Requires `phoenix_kit ~> 2.0`.** The core pin moved to `~> 2.0`, so this
+  release no longer resolves against core 1.7.
+
+  Core 2.0.0 squashes the migration chain into a single `V135` baseline and makes
+  V135 the chain's floor: `mix ecto.migrate` now *refuses* on a database below it
+  rather than migrating. Check `mix phoenix_kit.status` **before** upgrading. A
+  host below V135 must install `phoenix_kit 1.7.236` — the migration bridge, the
+  last release carrying the full pre-squash chain — migrate until the reported
+  version is at least V135, and only then move to 2.0.
+
+  This package does not call migration internals, so the change is the pin
+  itself.
+
+### Removed
+
+- **`priv/migrations/add_phoenix_kit_consent_logs.exs`, and the README step that
+  told you to run it.** This was a *third* definition of `phoenix_kit_consent_logs`
+  (after core's and the coordinator removed in 0.3.0), and the only one that
+  could actually break an install:
+
+  - It used `create table`, **not** `create_if_not_exists`. On any host where
+    core had already created the table — which is all of them, since core V43 —
+    `mix ecto.migrate` failed with `table "phoenix_kit_consent_logs" already
+    exists`.
+  - Every string column was the Ecto default `varchar(255)`, against core's
+    `varchar(64)`/`(30)`/`(20)`/`(45)`/`(64)`, with Ecto-default index names —
+    a third naming scheme distinct from core's and the coordinator's.
+
+  `mix phoenix_kit_legal.install` never pointed at this file; it has always
+  printed `mix phoenix_kit.update`, which is correct. The README and the install
+  task had been contradicting each other. README step 1 now matches the task.
+
+  **If you previously ran this template successfully**, your host predates core
+  creating the table and your columns are 255-wide with Ecto-default index names.
+  `mix phoenix_kit.doctor` (core 2.0) reports the divergence and
+  `mix phoenix_kit.repair` is the supported way to reconcile it. Nothing in this
+  package will touch it.
+
+### Added
+
+- **`test/consent_logs_ownership_test.exs`** — fails if a `migration_module/0`, a
+  migration coordinator module, or a `priv/` migration template reappears, and
+  pins `ConsentLog`'s length validations to core's exact column widths. Each
+  regression case was verified by reintroducing the condition and confirming the
+  test fails, not merely that it passes.
+- A schema-ownership section at the top of `AGENTS.md`, so the next contributor
+  sees the constraint before writing a migration.
+
+### Documentation
+
+- `dev_docs/reports/2026-08-10-module-migration-versioning.md` rewritten for
+  review by the module's original author: the full evidence chain (commit
+  `801e66ca`, V43's original DDL, the `phoenix_kit.update` ordering, core's
+  `ExpectedSchema`), all three DDLs side by side, and the finding that PR #8 —
+  while correctly fixing the version-tracking protocol — made the coordinator's
+  `DROP TABLE ... CASCADE` reachable against a core-owned table for the first
+  time.
+
+## 0.3.0 - 2026-08-10
+
+Requires `phoenix_kit ~> 2.0`, unchanged from 0.2.0.
+
+### Removed
+
+- **`migration_module/0` and the standalone consent-logs migration.**
+  `phoenix_kit_consent_logs` is a **core** table, not this package's, and this
+  package's migration had never run on any host — nor could it.
+
+  Legal began life inside core: the same commit that added "Legal Module Phase 1"
+  added core's **V43**, which created the table. When this package was extracted,
+  core kept V43, and a *fresh* coordinator was written here from the Ecto schema
+  rather than copied from V43 — so the two DDLs drifted. Core's V43 DDL now lives
+  in the squashed **V135** baseline, which is unconditional: the table exists on
+  every phoenix_kit install, with or without this package.
+
+  It could never run for two independent reasons. Core's chain migrates before
+  module migrations in the same task, and both DDLs are
+  `CREATE TABLE IF NOT EXISTS` — so by the time this module's `up/1` was reached,
+  the table already existed.
+
+  It still mattered, because `down/1` ran
+  `DROP TABLE IF EXISTS phoenix_kit_consent_logs CASCADE` against a table core
+  owns and that outlives this package. While the version was inferred from table
+  existence that rollback looked unreachable; repairing the version marker would
+  have armed it. Core 2.0 also added `PhoenixKit.Migrations.ExpectedSchema`,
+  which names this table, all 11 columns, 6 indexes and the pkey as core-owned
+  and is what `mix phoenix_kit.doctor` / `mix phoenix_kit.repair` verify against
+  — so the divergent shape was one core would report as damage.
+
+  **No runtime change:** a migration that never ran cannot stop running. Any
+  future change to this table belongs in core's chain.
+
+  Full analysis: `dev_docs/reports/2026-08-10-module-migration-versioning.md`.
+
+### Fixed
+
+- **`ConsentLog` had no length validations, on any field.** Core's columns are
+  narrower than the deleted DDL assumed — `session_id` is `varchar(64)` (this
+  package assumed 255) and `consent_version` is `varchar(20)` (assumed 50).
+  `ConsentLog.create/1` is public API host apps call, so an over-long value came
+  back as a raw Postgres varchar-overflow error instead of a changeset error the
+  caller could handle. Now validated at core's exact widths: `session_id` 64,
+  `consent_type` 30, `consent_version` 20, `ip_address` 45, `user_agent_hash` 64.
+
+## 0.2.0 - 2026-08-10
+
+### Changed
+
+- **⚠️ Requires `phoenix_kit ~> 2.0`.** The core pin moved to `~> 2.0`, so this
+  release no longer resolves against core 1.7.
+
+  Core 2.0.0 squashes the migration chain into a single `V135` baseline and makes
+  V135 the chain's floor: `mix ecto.migrate` now *refuses* on a database below it
+  rather than migrating. Check `mix phoenix_kit.status` **before** upgrading. A
+  host below V135 must install `phoenix_kit 1.7.236` — the migration bridge, the
+  last release carrying the full pre-squash chain — migrate until the reported
+  version is at least V135, and only then move to 2.0.
+
+  This package does not call migration internals, so the change is the pin
+  itself.
+
+- `phoenix_kit_publishing` raised to `~> 0.5` in step: its 0.5.0 is the first
+  release requiring core 2.0, so the old `~> 0.1` pin could only have resolved a
+  publishing that still required core 1.7 — an unsatisfiable set alongside
+  `phoenix_kit ~> 2.0`.
+
+### Known issue (resolved in 0.3.0)
+
+- This module's migration coordinator conflicted with core's ownership of
+  `phoenix_kit_consent_logs`. Resolved in 0.3.0 — see that entry.
+
+## Unreleased
+
+### Fixed
+- **`css_sources/0` no longer emits the same directory twice.** On a normal Hex
+  install the callback returned both `:phoenix_kit_legal` and a compile-time
+  absolute source root, and the host's generated
+  `assets/css/_phoenix_kit_sources.css` came out with two directives pointing at
+  one directory:
+
+  ```css
+  @source "../../deps/phoenix_kit_legal";
+  @source "/www/app/deps/phoenix_kit_legal";
+  ```
+
+  The absolute entry was added deliberately in 0.1.9 so `path:` deps resolve, on
+  the stated assumption that the pair collapses for Hex installs. It doesn't:
+  `Mix.Tasks.Compile.PhoenixKitCssSources` runs `Enum.uniq/1` over the raw
+  callback results — an atom and a string, never equal — and formats them into
+  path strings only afterwards. No other PhoenixKit module returned an absolute
+  root, so Legal was the only duplicated entry.
+
+  Effects were cosmetic in the common case (Tailwind scanned the directory
+  twice, and the file is regenerated every compile so it self-corrects per
+  machine), but the absolute path is baked in when *this dep* is compiled, which
+  made a generated file host-specific: git churn if it is committed, and a
+  `@source` that matches nothing if `_build` is carried across a path change,
+  such as a multi-stage Docker build that compiles under one prefix and runs
+  under another.
+
+  The absolute root is now returned only when it is not already what the
+  `:phoenix_kit_legal` entry resolves to. Path deps, umbrellas, and vendored
+  checkouts keep the fallback; standard installs get one directive.
+
+- **The comment justifying the old behaviour said the compiler de-duplicated the
+  pair via `Enum.uniq/1`.** It reads on the wrong side of the formatting step.
+  Replaced with the actual ordering, so the claim is checkable against
+  `compile.phoenix_kit_css_sources.ex`.
+
+### Added
+- `test/phoenix_kit_legal/css_sources_test.exs` — pins the deps/, path-dep, and
+  umbrella layouts, and asserts `css_sources/0` never lists a directory the atom
+  entry already covers.
+
 ## 0.1.10 (2026-08-03)
 
 ### Removed

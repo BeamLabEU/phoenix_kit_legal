@@ -201,28 +201,28 @@
 
             <form phx-submit="save_dpo_contact">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="form-control">
+                <div class="fieldset">
                   <label class="label">
-                    <span class="label-text">{gettext("DPO Name")}</span>
+                    <span class="fieldset-legend">{gettext("DPO Name")}</span>
                   </label>
                   <input
                     type="text"
                     name="dpo_name"
                     value={@dpo_contact["name"]}
-                    class="input input-bordered"
+                    class="input"
                   />
                 </div>
 
-                <div class="form-control">
+                <div class="fieldset">
                   <label class="label">
-                    <span class="label-text">{gettext("DPO Email")}</span>
+                    <span class="fieldset-legend">{gettext("DPO Email")}</span>
                   </label>
                   <div class="join w-full">
                     <input
                       type="email"
                       name="dpo_email"
                       value={@dpo_contact["email"]}
-                      class="input input-bordered join-item flex-1"
+                      class="input join-item flex-1"
                       placeholder="dpo@example.com"
                     />
                     <%= if @from_email != "" do %>
@@ -238,35 +238,35 @@
                   </div>
                   <%= if @from_email != "" do %>
                     <label class="label">
-                      <span class="label-text-alt text-base-content/50">
+                      <span class="fieldset-label text-base-content/50">
                         {gettext("Import available:")} {@from_email}
                       </span>
                     </label>
                   <% end %>
                 </div>
 
-                <div class="form-control">
+                <div class="fieldset">
                   <label class="label">
-                    <span class="label-text">{gettext("DPO Phone")}</span>
+                    <span class="fieldset-legend">{gettext("DPO Phone")}</span>
                   </label>
                   <input
                     type="tel"
                     name="dpo_phone"
                     value={@dpo_contact["phone"]}
-                    class="input input-bordered"
+                    class="input"
                   />
                 </div>
 
-                <div class="form-control">
+                <div class="fieldset">
                   <label class="label">
-                    <span class="label-text">{gettext("DPO Address")}</span>
+                    <span class="fieldset-legend">{gettext("DPO Address")}</span>
                   </label>
                   <div class="join w-full">
                     <input
                       type="text"
                       name="dpo_address"
                       value={@dpo_contact["address"]}
-                      class="input input-bordered join-item flex-1"
+                      class="input join-item flex-1"
                     />
                     <%= if @company_address_formatted != "" do %>
                       <button
@@ -281,7 +281,7 @@
                   </div>
                   <%= if @company_address_formatted != "" do %>
                     <label class="label">
-                      <span class="label-text-alt text-base-content/50">
+                      <span class="fieldset-label text-base-content/50">
                         {gettext("Import available from Organization")}
                       </span>
                     </label>
@@ -566,9 +566,9 @@
             <%= if @consent_widget_enabled do %>
               <form phx-submit="save_consent_settings" class="space-y-6">
                 <%!-- Consent Mode --%>
-                <div class="form-control">
+                <div class="fieldset">
                   <label class="label">
-                    <span class="label-text font-medium">{gettext("Consent Mode")}</span>
+                    <span class="fieldset-legend font-medium">{gettext("Consent Mode")}</span>
                   </label>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <%!-- Strict Mode --%>
@@ -645,9 +645,9 @@
                   </div>
 
                   <%!-- Icon Position (only for strict mode) --%>
-                  <div class="form-control">
+                  <div class="fieldset">
                     <label class="label">
-                      <span class="label-text">{gettext("Icon Position")}</span>
+                      <span class="fieldset-legend">{gettext("Icon Position")}</span>
                     </label>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <%= for {position, label} <- [
@@ -671,7 +671,7 @@
                   </div>
                 <% else %>
                   <%!-- Notice mode options --%>
-                  <div class="form-control">
+                  <div class="fieldset">
                     <.checkbox
                       name="hide_for_authenticated"
                       checked={@hide_for_authenticated}
@@ -690,9 +690,9 @@
                 <% end %>
 
                 <%!-- Policy Version Info --%>
-                <div class="form-control">
+                <div class="fieldset">
                   <label class="label">
-                    <span class="label-text">{gettext("Policy Version")}</span>
+                    <span class="fieldset-legend">{gettext("Policy Version")}</span>
                   </label>
                   <div class="flex items-center gap-2">
                     <span class="badge badge-lg badge-outline">{@policy_version}</span>
@@ -703,7 +703,7 @@
                 </div>
 
                 <%!-- Google Consent Mode --%>
-                <div class="form-control">
+                <div class="fieldset">
                   <.checkbox
                     name="google_consent_mode"
                     checked={@google_consent_mode}

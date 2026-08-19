@@ -53,6 +53,7 @@ defmodule PhoenixKit.Modules.Legal do
             ]}
 
   alias PhoenixKit.Dashboard.Tab
+  alias PhoenixKit.Modules.Legal.ConsentLog
   alias PhoenixKit.Modules.Legal.LegalFramework
   alias PhoenixKit.Modules.Legal.PageType
   alias PhoenixKit.Modules.Legal.TemplateGenerator
@@ -473,10 +474,39 @@ defmodule PhoenixKit.Modules.Legal do
 
   @doc """
   Update policy version.
+
+  Rejects a version longer than core's width for
+  `phoenix_kit_consent_logs.consent_version`, which this value can reach:
+  `get_consent_widget_config/0` publishes the active version to the widget as
+  `policy_version`, and the consent a visitor gives is logged with it as
+  `consent_version`.
+
+  This setting is the active version only while no cookie-policy or
+  privacy-policy page is published — `get_auto_policy_version/0` otherwise derives
+  the version from the latest page's `updated_at` and returns a 10-character date,
+  which cannot overflow the column. So the window is narrower than "always", and
+  in it an over-long value stored here is accepted and then rejects every consent
+  write in `ConsentLog.changeset/2`: an audit-trail outage whose cause is a
+  setting changed somewhere else entirely.
+
+  The width is read from `ConsentLog.column_widths/0` rather than restated, so it
+  cannot drift from the validation that enforces it.
+
+  ## Returns
+
+  - `{:ok, setting}` on success
+  - `{:error, :version_too_long}` when the string exceeds the column width
   """
   @spec update_policy_version(String.t()) :: {:ok, term()} | {:error, term()}
   def update_policy_version(version) when is_binary(version) do
-    Settings.update_setting_with_module("legal_policy_version", version, @module_name)
+    # Code points, not `String.length/1`'s graphemes — that is the unit Postgres
+    # counts for `varchar(n)`, and the two differ on combining marks and ZWJ
+    # sequences. See the note on `ConsentLog.column_widths/0`.
+    if length(String.codepoints(version)) > ConsentLog.column_widths().consent_version do
+      {:error, :version_too_long}
+    else
+      Settings.update_setting_with_module("legal_policy_version", version, @module_name)
+    end
   end
 
   @doc """
@@ -716,7 +746,13 @@ defmodule PhoenixKit.Modules.Legal do
     # Already a string, try to parse and format
     case DateTime.from_iso8601(datetime) do
       {:ok, dt, _} -> Calendar.strftime(dt, "%Y-%m-%d")
-      _ -> datetime
+      # Returning the unparsed string here made this function's output
+      # unbounded, and its output becomes `consent_version` — core's
+      # `varchar(20)`. An offset-less ISO8601 timestamp with microseconds does
+      # not parse and is 26 characters, which would have rejected every consent
+      # write. Fall back to the manual setting, which is width-guarded by
+      # `update_policy_version/1`.
+      _ -> get_policy_version()
     end
   end
 
@@ -776,16 +812,63 @@ defmodule PhoenixKit.Modules.Legal do
   # the OTP-app atom from `css_sources/0` so parent apps using
   # `{:phoenix_kit_legal, path: "..."}` (or any non-standard layout) get a
   # @source directive that resolves regardless of how the dep is declared.
-  # For Hex installs the absolute path points into `deps/phoenix_kit_legal`,
-  # producing the same effective scan as the atom entry — duplicates are
-  # de-duplicated by the compiler via Enum.uniq/1.
   @source_root Path.expand(Path.join(__DIR__, "../.."))
 
   @impl PhoenixKit.Module
-  def css_sources, do: [:phoenix_kit_legal, @source_root]
+  def css_sources, do: css_sources(@source_root, File.cwd!())
+
+  @doc """
+  `css_sources/0` with the source root and host project root injected, for tests.
+
+  Returns the absolute source root only when it is not already covered by the
+  `:phoenix_kit_legal` atom entry.
+
+  A previous revision returned `[:phoenix_kit_legal, @source_root]`
+  unconditionally, on the assumption that the two collapse into one directive on
+  Hex installs. They don't. `Mix.Tasks.Compile.PhoenixKitCssSources` calls
+  `Enum.uniq/1` on the raw callback results — where the entries are the atom
+  `:phoenix_kit_legal` and a path string, which are never equal — and only then
+  maps them through its formatter. So `assets/css/_phoenix_kit_sources.css` came
+  out with the same directory listed twice:
+
+      @source "../../deps/phoenix_kit_legal";
+      @source "/abs/path/to/app/deps/phoenix_kit_legal";
+
+  The absolute line is baked in at the time *this dep* is compiled, so it names
+  whichever machine or container built it. It is regenerated per build and so
+  self-corrects, but it makes the generated file host-specific — churn if it is
+  ever committed, and a path that scans nothing if `_build` is carried across a
+  relocation (a multi-stage Docker build that compiles under one prefix and runs
+  under another).
+
+  The check compares against exactly what the atom entry resolves to —
+  `<project_root>/deps/phoenix_kit_legal`, since the compiler emits
+  `@source "../../deps/phoenix_kit_legal";` relative to
+  `assets/css/_phoenix_kit_sources.css`. Anything else (path deps, umbrellas,
+  vendored checkouts) still gets the absolute fallback it needs.
+  """
+  def css_sources(source_root, project_root) do
+    if source_root == Path.expand("deps/phoenix_kit_legal", project_root) do
+      [:phoenix_kit_legal]
+    else
+      [:phoenix_kit_legal, source_root]
+    end
+  end
 
   @impl PhoenixKit.Module
-  def migration_module, do: PhoenixKit.Modules.Legal.Migrations.ConsentLogs
+  # Module-owned migration chain (the decentralization protocol; projects
+  # is the reference impl, document_creator the same shape over
+  # core-created tables). Core's V135 baseline still CREATES
+  # phoenix_kit_consent_logs on every install — this chain ADOPTS it (V1
+  # stamps the `pkl_schema:` marker without changing shape) and owns its
+  # future evolution. 0.3.0/0.3.1 briefly pinned the table as core-owned
+  # while killing two drifted in-package DDL copies; this chain is the
+  # deliberate extraction that followed, with the drift class solved at
+  # the root — the DDL widths are read from `ConsentLog.column_widths/0`,
+  # never restated. History and the V2+ shape-change protocol:
+  # dev_docs/reports/2026-08-10-module-migration-versioning.md and
+  # dev_docs/reports/2026-08-10-consent-logs-extraction.md.
+  def migration_module, do: PhoenixKit.Modules.Legal.Migrations
 
   # NOTE: Legal deliberately does NOT implement
   # `PhoenixKit.Module.reserved_route_prefixes/0`.
@@ -942,7 +1025,15 @@ defmodule PhoenixKit.Modules.Legal do
           title: get_in(post, [:metadata, :title]) || post.slug,
           status: get_in(post, [:metadata, :status]) || "draft",
           published_at: get_in(post, [:metadata, :published_at]),
-          updated_at: get_in(post, [:metadata, :updated_at]),
+          # Publishing puts the content timestamp at the TOP level of its post
+          # map, as `:content_updated_at` — its `:metadata` map has no
+          # `:updated_at` key at all (`DBStorage.Mapper.build_metadata/5`).
+          # Reading only the metadata key made this field permanently `nil`, and
+          # with it `get_auto_policy_version/0` permanently fell back to the
+          # manual setting: editing a policy page never bumped the consent
+          # version, so visitors were never re-prompted to consent. The metadata
+          # read stays as a fallback for older Publishing releases.
+          updated_at: post[:content_updated_at] || get_in(post, [:metadata, :updated_at]),
           language_statuses: post[:language_statuses] || %{},
           available_languages: post[:available_languages] || []
         }

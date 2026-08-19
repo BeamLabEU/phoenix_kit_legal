@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.1.10"
+  @version "0.4.2"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
@@ -66,21 +66,15 @@ defmodule PhoenixKitLegal.MixProject do
       # whenever this module is loaded, so on an older core the route resolves to
       # a module that exists nowhere — UndefinedFunctionError, on every request
       # the bundled JS makes. See AGENTS.md, "Consent Config Endpoint Contract".
-      #
-      # The requirement is a range and not `~> 1.7.227` because the tilde caps at
-      # `< 1.8.0`: a core 1.8 or 2.0 release would make this module uninstallable
-      # beside it, even though nothing here is tied to core's 1.7 line. The
-      # surface used is the `PhoenixKit.Module` behaviour, `Settings`,
-      # `Dashboard.Tab`, `SchemaPrefix`, `Utils.Routes`, `Cache` and
-      # `Migrations.Postgres`. The range keeps the 1.7.227 floor — it is
-      # load-bearing, see above — while letting 1.8.x and 2.x resolve. `< 3.0.0`
-      # is a deliberate checkpoint rather than a guess: a major may drop any of
-      # those APIs, so 3.0 support should be claimed after testing against it,
-      # not inherited from an open-ended requirement.
-      {:phoenix_kit, ">= 1.7.227 and < 3.0.0"},
+      {:phoenix_kit, "~> 2.0"},
+      # Build MDEx's Rust NIF from source on OTP versions it ships no
+      # compatible precompiled NIF for — same escape hatch core's mix.exs
+      # carries: MDEx's force_build requires rustler itself, not just
+      # rustler_precompiled. Optional: pulled only to compile the NIF.
+      {:rustler, ">= 0.0.0", optional: true},
 
       # Publishing module for storing generated legal pages as posts.
-      {:phoenix_kit_publishing, "~> 0.1"},
+      {:phoenix_kit_publishing, "~> 0.5"},
 
       # LiveView for admin settings page.
       {:phoenix_live_view, "~> 1.0"},
