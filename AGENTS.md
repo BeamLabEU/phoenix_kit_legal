@@ -19,7 +19,7 @@ changes no shape, which is why core's manifest stays accurate and no core releas
 was required. Rationale and the per-audience upgrade paths:
 `dev_docs/reports/2026-08-10-consent-logs-extraction.md`.
 
-What the chain must never do — each pinned by `test/consent_logs_ownership_test.exs`:
+What the chain must never do — pinned by `test/consent_logs_ownership_test.exs`, to the degree each bullet says:
 
 - **Never restate a column width.** Every varchar width in the DDL is interpolated
   from `ConsentLog.column_widths/0`, this package's single width authority. Three
@@ -30,9 +30,22 @@ What the chain must never do — each pinned by `test/consent_logs_ownership_tes
   those numbers is how that happened.
 - **Never ship a migration template under `priv/`.** Hosts migrate through
   `mix phoenix_kit.update`, which discovers the chain and writes the wrapper itself.
-- **Never emit `DROP`, `TRUNCATE` or `DELETE`.** The rows are a GDPR/CCPA consent
-  audit trail, and on every current install the table is core-created; `down/1`
-  unstamps the marker and does nothing else.
+- **Never emit `DROP`, `TRUNCATE` or `DELETE`, and never call any of Ecto's
+  other destructive macros** (`drop`, `drop_if_exists`, `rename`, `alter ... do
+  remove ... end`) **either.** The rows are a GDPR/CCPA consent audit trail, and
+  on every current install the table is core-created; `down/1` unstamps the
+  marker and does nothing else.
+  **The test suite's coverage of this rule is partial**, not the airtight
+  guarantee the line above might suggest: `neither direction executes SQL of its
+  own` catches a literal `execute("DROP TABLE ...")` written past the builder,
+  but not `drop(table(...))`, `drop_if_exists(...)` or `rename(...)` — all
+  reach the database exactly as directly and none touch `execute(`, which is
+  the only thing that test's regex looks for. Verified, not assumed:
+  `dev_docs/reports/2026-08-19-executed-path-guard-allowlist-gap.md` reproduces
+  all three against a clean `main`, each leaving all eighteen tests in
+  `consent_logs_ownership_test.exs` green. Closing it needs an allowlist over
+  what is actually executed, not another denylist entry — that report has the
+  reasoning and what it would take.
 
 Changing the table's shape is a chain version (V2+), and it is **not** a
 free-standing change: it must follow the excluded-object protocol in the extraction
