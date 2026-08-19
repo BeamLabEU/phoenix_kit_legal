@@ -168,8 +168,13 @@ every request raises `UndefinedFunctionError`, a 500 per page load, since core's
 bundled `phoenix_kit.js` fetches the endpoint on `DOMContentLoaded` whenever the
 widget root was not server-rendered. Nothing catches it at compile time: Phoenix
 compiles routes to literal tuples, so a missing controller produces no warning.
-Hence `{:phoenix_kit, "~> 1.7.227"}` in `mix.exs` — floored in the same release
-that shipped the deletion, and it must stay floored.
+Hence the floor cannot go below 1.7.227. The actual pin in `mix.exs`,
+`{:phoenix_kit, "~> 2.0"}`, is higher than that floor requires — raised
+independently, for reasons unrelated to this hazard (this package does not
+call core's migration internals; see the mix.exs comment above the
+dependency line) — so it satisfies the constraint without being read as
+proof the constraint sits at 2.0. If the pin is ever lowered, 1.7.227
+remains the true minimum.
 
 ### Tailwind `css_sources/0` Contract
 
