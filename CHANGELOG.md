@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.3 - 2026-08-19
+
+### Changed
+
+- Widened the `phoenix_kit` dependency from `~> 1.7.227` to `~> 2.0` (#19) —
+  the `< 1.8.0` ceiling `~>` implied was incidental, not a tested limit; the
+  package's actual surface (`PhoenixKit.Module`, `Settings`, `Dashboard.Tab`,
+  `SchemaPrefix`, `Utils.Routes`, `Cache`, `Migrations.Postgres`) isn't tied
+  to core's 1.7 line. No source behavior change.
+- Dependency updates: `phoenix_kit` 2.13.2, `req` 0.7.3, `tesla` 1.21.2.
+- Documentation: corrected `AGENTS.md`'s "Never emit DROP..." bullet to state
+  the executed-path guard's actual coverage rather than overstating it as
+  airtight (#20); landed the PR #7 review that had sat untracked since May,
+  and an audit report on the module-owned migration version protocol (#19).
+  No `lib/` or `test/` behavior changes from either.
+
 ## 0.4.2 - 2026-08-18
 
 ### Fixed
