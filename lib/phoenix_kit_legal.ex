@@ -14,8 +14,10 @@ defmodule PhoenixKitLegal do
 
   ## Dependencies
 
-  - `phoenix_kit` ~> 1.7.227 (owns the `/api/consent-config` endpoint this
-    package used to serve; see AGENTS.md, "Consent Config Endpoint Contract")
+  - `phoenix_kit` ~> 2.0 — core owns the `/api/consent-config` endpoint this
+    package used to serve as of 1.7.227, and any 2.x satisfies that floor;
+    the pin itself was raised to 2.0 independently of that requirement (see
+    AGENTS.md, "Consent Config Endpoint Contract")
   - `phoenix_kit_publishing` (for page generation and public page rendering)
   """
 
