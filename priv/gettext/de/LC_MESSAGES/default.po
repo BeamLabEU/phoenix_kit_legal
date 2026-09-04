@@ -456,7 +456,7 @@ msgstr "Richtlinienversion"
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:62
 #, elixir-autogen, elixir-format
 msgid "Preferences"
-msgstr "Einstellungen"
+msgstr "Präferenzen"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:742
 #, elixir-autogen, elixir-format
@@ -555,7 +555,7 @@ msgstr "Kontakt des Datenschutzbeauftragten speichern"
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:436
 #, elixir-autogen, elixir-format
 msgid "Save Preferences"
-msgstr "Einstellungen speichern"
+msgstr "Auswahl speichern"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:736
 #, elixir-autogen, elixir-format
