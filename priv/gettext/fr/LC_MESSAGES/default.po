@@ -54,12 +54,12 @@ msgstr "Calculé automatiquement à partir des dates de mise à jour de la polit
 #: lib/phoenix_kit_legal/web/settings.html.heex:656
 #, elixir-autogen, elixir-format
 msgid "Bottom Left"
-msgstr "Bas gauche"
+msgstr "En bas à gauche"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:657
 #, elixir-autogen, elixir-format
 msgid "Bottom Right"
-msgstr "Bas droite"
+msgstr "En bas à droite"
 
 #: lib/phoenix_kit_legal/legal.ex:1025
 #, elixir-autogen, elixir-format
@@ -382,7 +382,7 @@ msgstr "Pages légales"
 #: lib/phoenix_kit_legal/web/settings.html.heex:494
 #, elixir-autogen, elixir-format
 msgid "Legal Review Required"
-msgstr "Révision juridique requise"
+msgstr "Relecture juridique requise"
 
 #: lib/phoenix_kit_legal/web/settings.ex:44
 #: lib/phoenix_kit_legal/web/settings.html.heex:12
@@ -625,12 +625,12 @@ msgstr "Cette action supprimera toutes les pages légales et leur groupe. Vous d
 #: lib/phoenix_kit_legal/web/settings.html.heex:654
 #, elixir-autogen, elixir-format
 msgid "Top Left"
-msgstr "Haut gauche"
+msgstr "En haut à gauche"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:655
 #, elixir-autogen, elixir-format
 msgid "Top Right"
-msgstr "Haut droite"
+msgstr "En haut à droite"
 
 #: lib/phoenix_kit_legal/legal.ex:640
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:58
