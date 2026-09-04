@@ -488,7 +488,7 @@ msgstr "Für rechtliche Seiten ist das Publishing-Modul erforderlich. Bitte akti
 #: lib/phoenix_kit_legal/web/settings.html.heex:132
 #, elixir-autogen, elixir-format
 msgid "Reg. No:"
-msgstr "Handelsregisternr.:"
+msgstr "Reg.-Nr.:"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:467
 #, elixir-autogen, elixir-format
@@ -523,7 +523,7 @@ msgstr "Erforderlich"
 #: lib/phoenix_kit_legal/web/settings.html.heex:390
 #, elixir-autogen, elixir-format
 msgid "Required By"
-msgstr "Erforderlich bis"
+msgstr "Gefordert durch"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:199
 #, elixir-autogen, elixir-format
