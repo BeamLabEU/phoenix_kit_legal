@@ -93,6 +93,61 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
       assert translate("et", "Preferences") == "Eelistused"
     end
 
+    test "de locale translates the 'Legal' msgid" do
+      assert translate("de", "Legal") == "Rechtliches"
+    end
+
+    test "fr locale translates the 'Legal' msgid" do
+      assert translate("fr", "Legal") == "Mentions légales"
+    end
+
+    test "de locale translates page titles" do
+      assert translate("de", "Privacy Policy") == "Datenschutzerklärung"
+      assert translate("de", "Cookie Policy") == "Cookie-Richtlinie"
+      assert translate("de", "Terms of Service") == "Nutzungsbedingungen"
+    end
+
+    test "fr locale translates page titles" do
+      assert translate("fr", "Privacy Policy") == "Politique de confidentialité"
+      assert translate("fr", "Cookie Policy") == "Politique relative aux cookies"
+      assert translate("fr", "Terms of Service") == "Conditions d'utilisation"
+    end
+
+    test "de locale translates consent-widget banner strings" do
+      assert translate("de", "We value your privacy") == "Uns ist Ihre Privatsphäre wichtig"
+      assert translate("de", "Accept All") == "Alle akzeptieren"
+      assert translate("de", "Reject") == "Ablehnen"
+      assert translate("de", "Customize") == "Anpassen"
+    end
+
+    test "fr locale translates consent-widget banner strings" do
+      assert translate("fr", "We value your privacy") ==
+               "Nous accordons de l'importance à votre vie privée"
+
+      assert translate("fr", "Accept All") == "Tout accepter"
+      assert translate("fr", "Reject") == "Refuser"
+      assert translate("fr", "Customize") == "Personnaliser"
+    end
+
+    # Unlike ru/et above, this pair cannot pin all four category names: `de`
+    # and `fr` both render "Marketing" identically to the English msgid (spot
+    # checked against priv/gettext/{de,fr}/LC_MESSAGES/default.po). Asserting
+    # it here would pass even with a missing or corrupted de/fr catalogue,
+    # since Gettext falls back to the msgid on a miss. Essential, Analytics,
+    # and Preferences all differ from their msgids and are pinned instead —
+    # Marketing is deliberately left uncovered by this test.
+    test "de locale translates consent-widget category names" do
+      assert translate("de", "Essential") == "Notwendig"
+      assert translate("de", "Analytics") == "Analyse"
+      assert translate("de", "Preferences") == "Präferenzen"
+    end
+
+    test "fr locale translates consent-widget category names" do
+      assert translate("fr", "Essential") == "Essentiels"
+      assert translate("fr", "Analytics") == "Analytique"
+      assert translate("fr", "Preferences") == "Préférences"
+    end
+
     test "unknown locale falls back to the msgid" do
       assert translate("zz", "Legal") == "Legal"
       assert translate("zz", "Privacy Policy") == "Privacy Policy"
@@ -146,6 +201,20 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
       assert Tab.localized_label(tab) == "Õigusdokumendid"
     end
 
+    test "de locale resolves 'Legal' to 'Rechtliches'" do
+      Gettext.put_locale(LegalGettext, "de")
+
+      tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
+      assert Tab.localized_label(tab) == "Rechtliches"
+    end
+
+    test "fr locale resolves 'Legal' to 'Mentions légales'" do
+      Gettext.put_locale(LegalGettext, "fr")
+
+      tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
+      assert Tab.localized_label(tab) == "Mentions légales"
+    end
+
     # Every other test here sets the locale on this module's backend. The
     # application does not: core sets it globally and, separately, on
     # `PhoenixKitWeb.Gettext` (`phoenix_kit/lib/phoenix_kit_web/users/auth.ex`
@@ -174,6 +243,20 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
 
       tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
       assert Tab.localized_label(tab) == "Õigusdokumendid"
+    end
+
+    test "global locale reaches the tab for de as well" do
+      Gettext.put_locale("de")
+
+      tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
+      assert Tab.localized_label(tab) == "Rechtliches"
+    end
+
+    test "global locale reaches the tab for fr as well" do
+      Gettext.put_locale("fr")
+
+      tab = Enum.find(Legal.settings_tabs(), &(&1.id == :admin_settings_legal))
+      assert Tab.localized_label(tab) == "Mentions légales"
     end
 
     test "unknown locale falls back to the raw msgid" do
