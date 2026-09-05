@@ -136,6 +136,11 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
     # since Gettext falls back to the msgid on a miss. Essential, Analytics,
     # and Preferences all differ from their msgids and are pinned instead —
     # Marketing is deliberately left uncovered by this test.
+    # de and fr pin three of the four consent categories, where ru and et pin
+    # all four: "Marketing" is translated as "Marketing" in both catalogues, so
+    # asserting it would pass even with the catalogue removed entirely — Gettext
+    # falls back to the msgid. The coverage is deliberately asymmetric, not an
+    # oversight.
     test "de locale translates consent-widget category names" do
       assert translate("de", "Essential") == "Notwendig"
       assert translate("de", "Analytics") == "Analyse"
