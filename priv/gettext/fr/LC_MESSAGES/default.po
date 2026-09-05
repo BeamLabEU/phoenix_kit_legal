@@ -332,7 +332,7 @@ msgstr "Google Consent Mode v2"
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:52
 #, elixir-autogen, elixir-format
 msgid "Help us understand how you use our site to improve your experience."
-msgstr "Aidez-nous à comprendre comment vous utilisez notre site afin d'améliorer votre expérience."
+msgstr "Nous aident à comprendre comment vous utilisez notre site afin d'améliorer votre expérience."
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:685
 #, elixir-autogen, elixir-format
@@ -430,7 +430,7 @@ msgstr "Avis"
 #: lib/phoenix_kit_legal/web/settings.html.heex:634
 #, elixir-autogen, elixir-format
 msgid "Opt-in framework selected (GDPR, UK GDPR, LGPD, or PIPEDA)"
-msgstr "Cadre à consentement explicite sélectionné (RGPD, UK GDPR, LGPD ou PIPEDA)"
+msgstr "Cadre opt-in sélectionné (RGPD, UK GDPR, LGPD ou PIPEDA)"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:389
 #, elixir-autogen, elixir-format
@@ -565,7 +565,7 @@ msgstr "Enregistrer les paramètres"
 #: lib/phoenix_kit_legal/web/settings.html.heex:641
 #, elixir-autogen, elixir-format
 msgid "Select an opt-in framework to enable the floating icon"
-msgstr "Sélectionnez un cadre à consentement explicite pour activer l'icône flottante"
+msgstr "Sélectionnez un cadre opt-in pour activer l'icône flottante"
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:381
 #, elixir-autogen, elixir-format

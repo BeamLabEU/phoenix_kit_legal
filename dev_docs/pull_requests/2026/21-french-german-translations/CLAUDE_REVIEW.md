@@ -70,6 +70,44 @@ now read as French does (`En bas à gauche`, …). `Legal Review Required` was
 the neighbouring string that already says `Faites-les relire par un
 professionnel du droit`; now `Relecture juridique requise`.
 
+### Analytics category description read as a request, not a description (`de`, `fr`) — fixed
+
+`Help us understand how you use our site to improve your experience.` sits in
+the `description:` slot of the `analytics` cookie category, next to `Required
+for core functionality…`, `Used for personalized advertising…` — all of which
+describe what the cookies do. `de` (`Helfen Sie uns zu verstehen, wie Sie
+unsere Website nutzen, um Ihre Erfahrung zu verbessern.`) and `fr` (`Aidez-nous
+à comprendre comment vous utilisez notre site afin d'améliorer votre
+expérience.`) both used the imperative "you help us," turning a description of
+processing into a request to grant it. `ru` (`Помогают нам понять…`) and `et`
+(`Aitavad meil mõista…`) already used the third person. Now `de` reads `Helfen
+uns zu verstehen, wie Sie unsere Website nutzen, um Ihre Erfahrung zu
+verbessern.` (subject dropped, matching the verb-first style of the other
+category descriptions, e.g. `Merkt sich Ihre Einstellungen…`), and `fr` reads
+`Nous aident à comprendre comment vous utilisez notre site afin d'améliorer
+votre expérience.`
+
+### `fr` narrowed "opt-in" to a stricter GDPR term of art — fixed
+
+Both occurrences — `Cadre à consentement explicite sélectionné (…)` and
+`Sélectionnez un cadre à consentement explicite …` — used "consentement
+explicite," a defined GDPR concept (Art. 9(2)(a), Art. 49(1)(a)) narrower than
+plain opt-in; `de`/`ru`/`et` leave the term alone. Now `Cadre opt-in
+sélectionné (…)` and `Sélectionnez un cadre opt-in …`.
+
+### `de` named the same document two different ways — fixed
+
+`Privacy Policy` → `Datenschutzerklärung` (the published notice), but `Auto-
+calculated from Cookie/Privacy Policy update dates` → `Cookie-
+/Datenschutzrichtlinie` — a *Richtlinie* is an internal policy, not the
+published notice the admin hint refers to. Now `Cookie-/Datenschutzerklärung`.
+
+### `de` `Datenverkehr` read as network traffic, not site visits — fixed
+
+`…und unseren Datenverkehr zu analysieren` in the consent banner stated a
+processing purpose in terms of network data volume rather than visits. Now
+`…und unseren Website-Traffic zu analysieren`.
+
 ### `IMPROVEMENT - HIGH` — no test covered the new locales — fixed
 
 `test/phoenix_kit_legal/i18n_test.exs` pinned translations by name for `ru`
