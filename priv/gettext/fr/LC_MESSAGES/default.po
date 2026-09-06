@@ -1,0 +1,673 @@
+## "msgid"s in this file come from POT (.pot) files.
+##
+## Do not add, change, or remove `msgid`s manually here as
+## they're tied to the ones in the corresponding POT file
+## (with the same domain).
+##
+## Use `mix gettext.extract --merge` or `mix gettext.merge`
+## to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: lib/phoenix_kit_legal/legal.ex:1018
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:279
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:418
+#, elixir-autogen
+msgid "Legal"
+msgstr "Mentions légales"
+
+#: lib/phoenix_kit_legal/legal.ex:617
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:306
+#: lib/phoenix_kit_legal/web/settings.html.heex:827
+#, elixir-autogen, elixir-format
+msgid "Accept All"
+msgstr "Tout accepter"
+
+#: lib/phoenix_kit_legal/legal.ex:1026
+#, elixir-autogen, elixir-format
+msgid "Acceptable Use Policy"
+msgstr "Politique d'utilisation acceptable"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:392
+#, elixir-autogen, elixir-format
+msgid "Actions"
+msgstr "Actions"
+
+#: lib/phoenix_kit_legal/web/settings.ex:128
+#, elixir-autogen, elixir-format
+msgid "Address imported from Organization"
+msgstr "Adresse importée depuis l'organisation"
+
+#: lib/phoenix_kit_legal/legal.ex:633
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:49
+#, elixir-autogen, elixir-format
+msgid "Analytics"
+msgstr "Analytique"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:708
+#, elixir-autogen, elixir-format
+msgid "Auto-calculated from Cookie/Privacy Policy update dates"
+msgstr "Calculé automatiquement à partir des dates de mise à jour de la politique de cookies/confidentialité"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:656
+#, elixir-autogen, elixir-format
+msgid "Bottom Left"
+msgstr "En bas à gauche"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:657
+#, elixir-autogen, elixir-format
+msgid "Bottom Right"
+msgstr "En bas à droite"
+
+#: lib/phoenix_kit_legal/legal.ex:1025
+#, elixir-autogen, elixir-format
+msgid "CCPA Notice at Collection"
+msgstr "Avis CCPA au moment de la collecte"
+
+#: lib/phoenix_kit_legal/legal.ex:620
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:352
+#, elixir-autogen, elixir-format
+msgid "Close"
+msgstr "Fermer"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:84
+#, elixir-autogen, elixir-format
+msgid "Company Information"
+msgstr "Informations sur l'entreprise"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:117
+#, elixir-autogen, elixir-format
+msgid "Company information not configured"
+msgstr "Informations sur l'entreprise non configurées"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:53
+#, elixir-autogen, elixir-format
+msgid "Compliance Frameworks"
+msgstr "Cadres de conformité"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:14
+#, elixir-autogen, elixir-format
+msgid "Configure compliance frameworks, company information, and generate legal pages."
+msgstr "Configurez les cadres de conformité, les informations de l'entreprise et générez les pages légales."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:516
+#, elixir-autogen, elixir-format
+msgid "Configure the cookie consent banner for your website visitors."
+msgstr "Configurez la bannière de consentement aux cookies pour les visiteurs de votre site."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:571
+#, elixir-autogen, elixir-format
+msgid "Consent Mode"
+msgstr "Mode de consentement"
+
+#: lib/phoenix_kit_legal/web/settings.ex:307
+#, elixir-autogen, elixir-format
+msgid "Consent widget settings saved"
+msgstr "Paramètres du widget de consentement enregistrés"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:513
+#, elixir-autogen, elixir-format
+msgid "Cookie Consent Widget"
+msgstr "Widget de consentement aux cookies"
+
+#: lib/phoenix_kit_legal/legal.ex:625
+#: lib/phoenix_kit_legal/legal.ex:1021
+#: lib/phoenix_kit_legal/web/settings.html.heex:814
+#, elixir-autogen, elixir-format
+msgid "Cookie Policy"
+msgstr "Politique relative aux cookies"
+
+#: lib/phoenix_kit_legal/legal.ex:614
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:254
+#, elixir-autogen, elixir-format
+msgid "Cookie consent"
+msgstr "Consentement aux cookies"
+
+#: lib/phoenix_kit_legal/web/settings.ex:266
+#, elixir-autogen, elixir-format
+msgid "Cookie consent widget disabled"
+msgstr "Widget de consentement aux cookies désactivé"
+
+#: lib/phoenix_kit_legal/web/settings.ex:280
+#, elixir-autogen, elixir-format
+msgid "Cookie consent widget enabled"
+msgstr "Widget de consentement aux cookies activé"
+
+#: lib/phoenix_kit_legal/legal.ex:626
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:240
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:241
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:319
+#: lib/phoenix_kit_legal/web/settings.html.heex:781
+#, elixir-autogen, elixir-format
+msgid "Cookie preferences"
+msgstr "Préférences relatives aux cookies"
+
+#: lib/phoenix_kit_legal/legal.ex:615
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:292
+#: lib/phoenix_kit_legal/web/settings.html.heex:821
+#, elixir-autogen, elixir-format
+msgid "Customize"
+msgstr "Personnaliser"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:262
+#, elixir-autogen, elixir-format
+msgid "DPO Address"
+msgstr "Adresse du DPO"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:218
+#, elixir-autogen, elixir-format
+msgid "DPO Email"
+msgstr "E-mail du DPO"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:206
+#, elixir-autogen, elixir-format
+msgid "DPO Name"
+msgstr "Nom du DPO"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:250
+#, elixir-autogen, elixir-format
+msgid "DPO Phone"
+msgstr "Téléphone du DPO"
+
+#: lib/phoenix_kit_legal/web/settings.ex:149
+#, elixir-autogen, elixir-format
+msgid "DPO contact saved"
+msgstr "Contact du DPO enregistré"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:197
+#, elixir-autogen, elixir-format
+msgid "Data Protection Officer (DPO)"
+msgstr "Délégué à la protection des données (DPO)"
+
+#: lib/phoenix_kit_legal/legal.ex:1024
+#, elixir-autogen, elixir-format
+msgid "Data Retention Policy"
+msgstr "Politique de conservation des données"
+
+#: lib/phoenix_kit_legal/legal.ex:1023
+#, elixir-autogen, elixir-format
+msgid "Do Not Sell My Personal Information"
+msgstr "Ne pas vendre mes informations personnelles"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:688
+#, elixir-autogen, elixir-format
+msgid "Don't show consent banner to logged-in users (they agreed via Terms)"
+msgstr "Ne pas afficher la bannière de consentement aux utilisateurs connectés (ils ont déjà accepté via les conditions)"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:447
+#, elixir-autogen, elixir-format
+msgid "Edit"
+msgstr "Modifier"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:95
+#, elixir-autogen, elixir-format
+msgid "Edit Organization"
+msgstr "Modifier l'organisation"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:104
+#, elixir-autogen, elixir-format
+msgid "Edit Site URL"
+msgstr "Modifier l'URL du site"
+
+#: lib/phoenix_kit_legal/web/settings.ex:111
+#, elixir-autogen, elixir-format
+msgid "Email imported from General Settings"
+msgstr "E-mail importé depuis les paramètres généraux"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:522
+#, elixir-autogen, elixir-format
+msgid "Enable Cookie Banner"
+msgstr "Activer la bannière de cookies"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:44
+#, elixir-autogen, elixir-format
+msgid "Enable Publishing"
+msgstr "Activer Publishing"
+
+#: lib/phoenix_kit_legal/legal.ex:629
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:42
+#, elixir-autogen, elixir-format
+msgid "Essential"
+msgstr "Essentiels"
+
+#: lib/phoenix_kit_legal/web/settings.ex:179
+#, elixir-autogen, elixir-format
+msgid "Failed to generate page: %{reason}"
+msgstr "Échec de la génération de la page : %{reason}"
+
+#: lib/phoenix_kit_legal/web/settings.ex:131
+#, elixir-autogen, elixir-format
+msgid "Failed to import address"
+msgstr "Échec de l'importation de l'adresse"
+
+#: lib/phoenix_kit_legal/web/settings.ex:114
+#, elixir-autogen, elixir-format
+msgid "Failed to import email"
+msgstr "Échec de l'importation de l'e-mail"
+
+#: lib/phoenix_kit_legal/web/settings.ex:199
+#, elixir-autogen, elixir-format
+msgid "Failed to publish page: %{reason}"
+msgstr "Échec de la publication de la page : %{reason}"
+
+#: lib/phoenix_kit_legal/web/settings.ex:152
+#, elixir-autogen, elixir-format
+msgid "Failed to save DPO contact"
+msgstr "Échec de l'enregistrement du contact DPO"
+
+#: lib/phoenix_kit_legal/web/settings.ex:97
+#, elixir-autogen, elixir-format
+msgid "Failed to save frameworks"
+msgstr "Échec de l'enregistrement des cadres"
+
+#: lib/phoenix_kit_legal/web/settings.ex:310
+#, elixir-autogen, elixir-format
+msgid "Failed to save settings"
+msgstr "Échec de l'enregistrement des paramètres"
+
+#: lib/phoenix_kit_legal/web/settings.ex:269
+#: lib/phoenix_kit_legal/web/settings.ex:283
+#, elixir-autogen, elixir-format
+msgid "Failed to update setting"
+msgstr "Échec de la mise à jour du paramètre"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:638
+#, elixir-autogen, elixir-format
+msgid "Floating icon will NOT be shown"
+msgstr "L'icône flottante ne sera PAS affichée"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:632
+#, elixir-autogen, elixir-format
+msgid "Floating icon will be shown"
+msgstr "L'icône flottante sera affichée"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:586
+#, elixir-autogen, elixir-format
+msgid "Full GDPR compliance: floating icon, script blocking, re-consent on policy updates"
+msgstr "Conformité RGPD complète : icône flottante, blocage des scripts, nouveau consentement lors des mises à jour de la politique"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:468
+#, elixir-autogen, elixir-format
+msgid "Generate"
+msgstr "Générer"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:357
+#, elixir-autogen, elixir-format
+msgid "Generate All Required Pages"
+msgstr "Générer toutes les pages requises"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:330
+#, elixir-autogen, elixir-format
+msgid "Generate legal pages based on selected frameworks."
+msgstr "Générez les pages légales en fonction des cadres sélectionnés."
+
+#: lib/phoenix_kit_legal/web/settings.ex:221
+#, elixir-autogen, elixir-format
+msgid "Generated %{count} pages"
+msgstr "%{count} pages générées"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:496
+#, elixir-autogen, elixir-format
+msgid "Generated pages are drafts. Have them reviewed by a legal professional before publishing."
+msgstr "Les pages générées sont des brouillons. Faites-les relire par un professionnel du droit avant publication."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:119
+#, elixir-autogen, elixir-format
+msgid "Go to Settings → Organization to set up your company details."
+msgstr "Accédez à Paramètres → Organisation pour renseigner les informations de votre entreprise."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:557
+#, elixir-autogen, elixir-format
+msgid "Go to the Legal Pages section below to generate and publish them."
+msgstr "Accédez à la section Pages légales ci-dessous pour les générer et les publier."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:725
+#, elixir-autogen, elixir-format
+msgid "Google Consent Mode v2"
+msgstr "Google Consent Mode v2"
+
+#: lib/phoenix_kit_legal/legal.ex:635
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:52
+#, elixir-autogen, elixir-format
+msgid "Help us understand how you use our site to improve your experience."
+msgstr "Nous aident à comprendre comment vous utilisez notre site afin d'améliorer votre expérience."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:685
+#, elixir-autogen, elixir-format
+msgid "Hide for authenticated users"
+msgstr "Masquer pour les utilisateurs connectés"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:650
+#, elixir-autogen, elixir-format
+msgid "Icon Position"
+msgstr "Position de l'icône"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:285
+#, elixir-autogen, elixir-format
+msgid "Import available from Organization"
+msgstr "Importation disponible depuis l'organisation"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:242
+#, elixir-autogen, elixir-format
+msgid "Import available:"
+msgstr "Importation disponible :"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:276
+#, elixir-autogen, elixir-format
+msgid "Import from Company Address"
+msgstr "Importer depuis l'adresse de l'entreprise"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:233
+#, elixir-autogen, elixir-format
+msgid "Import from General Settings"
+msgstr "Importer depuis les paramètres généraux"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:728
+#, elixir-autogen, elixir-format
+msgid "Integrate with Google Analytics/Ads consent signals"
+msgstr "Intégrer avec les signaux de consentement Google Analytics/Ads"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:306
+#, elixir-autogen, elixir-format
+msgid "Issues detected with legal pages"
+msgstr "Problèmes détectés avec les pages légales"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:328
+#, elixir-autogen, elixir-format
+msgid "Legal Pages"
+msgstr "Pages légales"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:494
+#, elixir-autogen, elixir-format
+msgid "Legal Review Required"
+msgstr "Relecture juridique requise"
+
+#: lib/phoenix_kit_legal/web/settings.ex:44
+#: lib/phoenix_kit_legal/web/settings.html.heex:12
+#, elixir-autogen, elixir-format
+msgid "Legal Settings"
+msgstr "Paramètres légaux"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:552
+#, elixir-autogen, elixir-format
+msgid "Legal pages not published"
+msgstr "Pages légales non publiées"
+
+#: lib/phoenix_kit_legal/web/settings.ex:241
+#, elixir-autogen, elixir-format
+msgid "Legal pages reset successfully. You can now regenerate them."
+msgstr "Pages légales réinitialisées avec succès. Vous pouvez maintenant les régénérer."
+
+#: lib/phoenix_kit_legal/legal.ex:619
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:344
+#, elixir-autogen, elixir-format
+msgid "Manage your cookie settings"
+msgstr "Gérer vos paramètres de cookies"
+
+#: lib/phoenix_kit_legal/legal.ex:638
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:56
+#, elixir-autogen, elixir-format
+msgid "Marketing"
+msgstr "Marketing"
+
+#: lib/phoenix_kit_legal/web/settings.ex:245
+#, elixir-autogen, elixir-format
+msgid "No issues detected — reset not needed"
+msgstr "Aucun problème détecté — réinitialisation non nécessaire"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:437
+#, elixir-autogen, elixir-format
+msgid "Not generated"
+msgstr "Non générée"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:602
+#, elixir-autogen, elixir-format
+msgid "Notice"
+msgstr "Avis"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:634
+#, elixir-autogen, elixir-format
+msgid "Opt-in framework selected (GDPR, UK GDPR, LGPD, or PIPEDA)"
+msgstr "Cadre opt-in sélectionné (RGPD, UK GDPR, LGPD ou PIPEDA)"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:389
+#, elixir-autogen, elixir-format
+msgid "Page"
+msgstr "Page"
+
+#: lib/phoenix_kit_legal/web/settings.ex:171
+#, elixir-autogen, elixir-format
+msgid "Page generated successfully"
+msgstr "Page générée avec succès"
+
+#: lib/phoenix_kit_legal/web/settings.ex:192
+#, elixir-autogen, elixir-format
+msgid "Page published successfully"
+msgstr "Page publiée avec succès"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:703
+#, elixir-autogen, elixir-format
+msgid "Policy Version"
+msgstr "Version de la politique"
+
+#: lib/phoenix_kit_legal/legal.ex:643
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:62
+#, elixir-autogen, elixir-format
+msgid "Preferences"
+msgstr "Préférences"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:742
+#, elixir-autogen, elixir-format
+msgid "Preview"
+msgstr "Aperçu"
+
+#: lib/phoenix_kit_legal/legal.ex:624
+#: lib/phoenix_kit_legal/legal.ex:1020
+#, elixir-autogen, elixir-format
+msgid "Privacy Policy"
+msgstr "Politique de confidentialité"
+
+#: lib/phoenix_kit_legal/legal.ex:618
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:341
+#, elixir-autogen, elixir-format
+msgid "Privacy Preferences"
+msgstr "Préférences de confidentialité"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:455
+#, elixir-autogen, elixir-format
+msgid "Publish"
+msgstr "Publier"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:36
+#, elixir-autogen, elixir-format
+msgid "Publishing module is required for Legal pages. Please enable Publishing first."
+msgstr "Le module Publishing est requis pour les pages légales. Veuillez d'abord activer Publishing."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:132
+#, elixir-autogen, elixir-format
+msgid "Reg. No:"
+msgstr "N° d'immatriculation :"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:467
+#, elixir-autogen, elixir-format
+msgid "Regenerate"
+msgstr "Régénérer"
+
+#: lib/phoenix_kit_legal/legal.ex:616
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:299
+#: lib/phoenix_kit_legal/web/settings.html.heex:824
+#, elixir-autogen, elixir-format
+msgid "Reject"
+msgstr "Refuser"
+
+#: lib/phoenix_kit_legal/legal.ex:621
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:429
+#, elixir-autogen, elixir-format
+msgid "Reject All"
+msgstr "Tout refuser"
+
+#: lib/phoenix_kit_legal/legal.ex:644
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:64
+#, elixir-autogen, elixir-format
+msgid "Remember your settings like language and region preferences."
+msgstr "Mémoriser vos préférences telles que la langue et la région."
+
+#: lib/phoenix_kit_legal/legal.ex:623
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:385
+#, elixir-autogen, elixir-format
+msgid "Required"
+msgstr "Requis"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:390
+#, elixir-autogen, elixir-format
+msgid "Required By"
+msgstr "Requis par"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:199
+#, elixir-autogen, elixir-format
+msgid "Required for GDPR compliance. Leave empty if not applicable."
+msgstr "Requis pour la conformité RGPD. Laissez vide si non applicable."
+
+#: lib/phoenix_kit_legal/legal.ex:630
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:44
+#, elixir-autogen, elixir-format
+msgid "Required for core functionality. These cannot be disabled."
+msgstr "Requis pour les fonctionnalités essentielles. Ils ne peuvent pas être désactivés."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:318
+#, elixir-autogen, elixir-format
+msgid "Reset Legal Pages"
+msgstr "Réinitialiser les pages légales"
+
+#: lib/phoenix_kit_legal/web/settings.ex:249
+#, elixir-autogen, elixir-format
+msgid "Reset failed: %{reason}"
+msgstr "Échec de la réinitialisation : %{reason}"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:294
+#, elixir-autogen, elixir-format
+msgid "Save DPO Contact"
+msgstr "Enregistrer le contact DPO"
+
+#: lib/phoenix_kit_legal/legal.ex:622
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:436
+#, elixir-autogen, elixir-format
+msgid "Save Preferences"
+msgstr "Enregistrer les préférences"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:736
+#, elixir-autogen, elixir-format
+msgid "Save Settings"
+msgstr "Enregistrer les paramètres"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:641
+#, elixir-autogen, elixir-format
+msgid "Select an opt-in framework to enable the floating icon"
+msgstr "Sélectionnez un cadre opt-in pour activer l'icône flottante"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:381
+#, elixir-autogen, elixir-format
+msgid "Select compliance frameworks above to see required pages."
+msgstr "Sélectionnez les cadres de conformité ci-dessus pour voir les pages requises."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:55
+#, elixir-autogen, elixir-format
+msgid "Select the privacy regulations your application must comply with."
+msgstr "Sélectionnez les réglementations en matière de confidentialité auxquelles votre application doit se conformer."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:524
+#, elixir-autogen, elixir-format
+msgid "Show cookie consent banner to visitors"
+msgstr "Afficher la bannière de consentement aux cookies aux visiteurs"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:604
+#, elixir-autogen, elixir-format
+msgid "Simple notice: banner shown once, no blocking, no floating icon"
+msgstr "Avis simple : bannière affichée une fois, sans blocage, sans icône flottante"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:185
+#, elixir-autogen, elixir-format
+msgid "Site URL not configured"
+msgstr "URL du site non configurée"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:391
+#, elixir-autogen, elixir-format
+msgid "Status"
+msgstr "Statut"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:584
+#, elixir-autogen, elixir-format
+msgid "Strict"
+msgstr "Strict"
+
+#: lib/phoenix_kit_legal/legal.ex:1022
+#, elixir-autogen, elixir-format
+msgid "Terms of Service"
+msgstr "Conditions d'utilisation"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:554
+#, elixir-autogen, elixir-format
+msgid "The following pages need to be published for the consent widget to work properly:"
+msgstr "Les pages suivantes doivent être publiées pour que le widget de consentement fonctionne correctement :"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:109
+#, elixir-autogen, elixir-format
+msgid "This information will appear in your legal documents."
+msgstr "Ces informations apparaîtront dans vos documents légaux."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:315
+#, elixir-autogen, elixir-format
+msgid "This will delete all legal pages and their group. You will need to regenerate them. Continue?"
+msgstr "Cette action supprimera toutes les pages légales et leur groupe. Vous devrez les régénérer. Continuer ?"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:654
+#, elixir-autogen, elixir-format
+msgid "Top Left"
+msgstr "En haut à gauche"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:655
+#, elixir-autogen, elixir-format
+msgid "Top Right"
+msgstr "En haut à droite"
+
+#: lib/phoenix_kit_legal/legal.ex:640
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:58
+#, elixir-autogen, elixir-format
+msgid "Used for personalized advertising and measuring ad effectiveness."
+msgstr "Utilisés pour la publicité personnalisée et la mesure de l'efficacité publicitaire."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:164
+#, elixir-autogen, elixir-format
+msgid "VAT:"
+msgstr "TVA :"
+
+#: lib/phoenix_kit_legal/legal.ex:613
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:271
+#, elixir-autogen, elixir-format
+msgid "We use cookies to enhance your browsing experience and analyze our traffic."
+msgstr "Nous utilisons des cookies pour améliorer votre expérience de navigation et analyser notre trafic."
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:812
+#, elixir-autogen, elixir-format
+msgid "We use cookies to enhance your experience."
+msgstr "Nous utilisons des cookies pour améliorer votre expérience."
+
+#: lib/phoenix_kit_legal/legal.ex:611
+#: lib/phoenix_kit_legal/web/cookie_consent.ex:268
+#: lib/phoenix_kit_legal/web/settings.html.heex:809
+#, elixir-autogen, elixir-format
+msgid "We value your privacy"
+msgstr "Nous accordons de l'importance à votre vie privée"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:765
+#, elixir-autogen, elixir-format
+msgid "Your website content"
+msgstr "Le contenu de votre site"
+
+#: lib/phoenix_kit_legal/web/settings.html.heex:746
+#, elixir-autogen, elixir-format
+msgid "your-website.com"
+msgstr "votre-site.com"
+
