@@ -669,5 +669,5 @@ msgstr "Der Inhalt Ihrer Website"
 #: lib/phoenix_kit_legal/web/settings.html.heex:746
 #, elixir-autogen, elixir-format
 msgid "your-website.com"
-msgstr "ihre-website.de"
+msgstr "your-website.com"
 

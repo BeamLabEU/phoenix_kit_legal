@@ -332,7 +332,7 @@ msgstr "Google Consent Mode v2"
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:52
 #, elixir-autogen, elixir-format
 msgid "Help us understand how you use our site to improve your experience."
-msgstr "Nous aident à comprendre comment vous utilisez notre site afin d'améliorer votre expérience."
+msgstr "Nous aider à comprendre comment vous utilisez notre site afin d'améliorer votre expérience."
 
 #: lib/phoenix_kit_legal/web/settings.html.heex:685
 #, elixir-autogen, elixir-format

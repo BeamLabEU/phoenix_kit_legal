@@ -108,6 +108,26 @@ published notice the admin hint refers to. Now `Cookie-/Datenschutzerklärung`.
 processing purpose in terms of network data volume rather than visits. Now
 `…und unseren Website-Traffic zu analysieren`.
 
+### `fr` analytics description used a finite verb with no subject — fixed
+
+The previous round's fix, `Nous aident à comprendre comment vous utilisez
+notre site afin d'améliorer votre expérience.`, opened with the object
+pronoun `Nous` followed by a third-person-plural verb with nothing for it to
+agree with — French does not allow the subject-drop that makes this pattern
+work in `de`/`ru`/`et`. The sibling category descriptions in the same
+catalogue solve "describe without a stated subject" with the infinitive
+(`Mémoriser vos préférences…`) or a participle (`Requis pour…`, `Utilisés
+pour…`), never a bare finite verb. Now `Nous aider à comprendre comment vous
+utilisez notre site afin d'améliorer votre expérience.`
+
+### `de` Site URL placeholder assumed a `.de` domain — fixed
+
+The example placeholder for the Site URL field (`your-website.com`) was
+localized to `ihre-website.de`, which reads as a recommendation to register a
+German ccTLD — wrong for a German-language site under `.at`, `.ch`, or any
+other TLD. `ru`/`et` leave the placeholder untranslated; `de` now does too
+(`your-website.com`).
+
 ### `IMPROVEMENT - HIGH` — no test covered the new locales — fixed
 
 `test/phoenix_kit_legal/i18n_test.exs` pinned translations by name for `ru`
