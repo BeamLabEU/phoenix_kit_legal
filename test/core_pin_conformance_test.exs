@@ -14,7 +14,12 @@ defmodule PhoenixKitLegal.CorePinConformanceTest do
 
   Core 1.7 is deliberately excluded: core 2.0.0 squashed the migration chain to
   a V135 floor and this module is verified only against that baseline.
+
+  Also pins that `version/0` stays single-sourced from `mix.exs`, so a release
+  bump cannot leave the behaviour callback reporting a stale number.
   """
+
+  alias PhoenixKit.Modules.Legal
 
   @must_admit ["2.0.0", "2.0.7", "2.1.0", "2.9.4"]
   @must_reject ["1.7.189", "1.7.236", "1.9.4", "3.0.0"]
@@ -37,6 +42,16 @@ defmodule PhoenixKitLegal.CorePinConformanceTest do
              "`:phoenix_kit` requirement #{inspect(requirement)} admits core #{version}, " <>
                "which is outside the range this module is verified against."
     end
+  end
+
+  test "version/0 is single-sourced from mix.exs" do
+    version = Mix.Project.config()[:version]
+
+    assert PhoenixKitLegal.version() == version
+
+    assert Legal.version() == version,
+           "the PhoenixKit.Module callback must report the mix.exs version — " <>
+             "a literal here goes stale on the next release bump"
   end
 
   # Resolution order matters. `Mix.Project.config()` is exact, but it reports the
