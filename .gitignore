@@ -9,7 +9,6 @@ erl_crash.dump
 .fetch
 /priv/plts/
 .mcp.json
-CLAUDE.md
 .claude/
 CLAUDE.local.md
 .expert/

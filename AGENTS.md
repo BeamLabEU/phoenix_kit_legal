@@ -1,215 +1,245 @@
 # AGENTS.md
 
-This file provides guidance to AI agents working with code in this repository.
+Guidance for AI agents working on `phoenix_kit_legal`.
 
-## ⚠️ This module owns the shape of one core-created table
+## Overview
 
-`phoenix_kit_consent_logs` is created by core's migration chain (V43, now folded
-into the squashed V135 baseline), so it exists on every PhoenixKit install, with or
-without this package. Core 2.0's `PhoenixKit.Migrations.ExpectedSchema` still names
-the table, all 11 columns, 6 indexes and the pkey as core-owned, and that manifest
-is what `mix phoenix_kit.doctor` and `mix phoenix_kit.repair` verify live databases
-against.
+Legal compliance module for PhoenixKit: it selects compliance frameworks
+(GDPR/CCPA/LGPD/PIPEDA and friends), generates legal pages from EEx templates
+into the Publishing module, renders the cookie consent widget with Google
+Consent Mode v2, and logs consent decisions to an audit trail. It implements the
+`PhoenixKit.Module` behaviour and is auto-discovered by the host application.
+Legal generates content; Publishing renders it.
 
-Since 0.4.0 this package owns the table's **future** shape, through
-`PhoenixKit.Modules.Legal.Migrations` — returned by `migration_module/0`
-(`legal.ex:871`). V1 of that chain is an *adoption*, not a create: `CREATE TABLE IF
-NOT EXISTS` with core's exact object names, then a `pkl_schema:1` comment marker. It
-changes no shape, which is why core's manifest stays accurate and no core release
-was required. Rationale and the per-audience upgrade paths:
-`dev_docs/reports/2026-08-10-consent-logs-extraction.md`.
+- **Depends on:** `phoenix_kit` `~> 2.0` (Hex), `phoenix_kit_publishing` `~> 0.5`
+  (hard — legal pages are Publishing posts and Publishing serves them publicly;
+  call sites still go through `publishing_enabled?/0`, which rescues, and a
+  `@compile {:no_warn_undefined, …}` list). Also `phoenix_live_view ~> 1.0`,
+  `ecto_sql ~> 3.10`, `gettext ~> 1.0`.
+- **Consumed by:** no sibling module. Core reaches into it behind
+  `Code.ensure_loaded?(PhoenixKit.Modules.Legal)` from three places: the
+  consent-config controller, `AssetsController` (serves this package's
+  `phoenix_kit_consent.js`), and `LayoutWrapper` (renders the widget).
+- **Admin surface:** one settings subtab, `Settings → Legal`, at
+  `{prefix}/admin/settings/legal` (tab id `:admin_settings_legal`, parent
+  `:admin_settings`, permission `"legal"`). No public pages of its own.
+- **Module key** `"legal"`; settings prefix `legal_`.
 
-What the chain must never do — pinned by `test/consent_logs_ownership_test.exs`, to the degree each bullet says:
+## What this module does NOT do
 
-- **Never restate a column width.** Every varchar width in the DDL is interpolated
-  from `ConsentLog.column_widths/0`, this package's single width authority. Three
-  separate DDLs for this one table had accumulated by 2026-08-10 — core's, a
-  coordinator here, and a copy-into-your-app template the README pointed at — all
-  disagreeing on widths and index names
-  (`dev_docs/reports/2026-08-10-module-migration-versioning.md`). A second copy of
-  those numbers is how that happened.
-- **Never ship a migration template under `priv/`.** Hosts migrate through
-  `mix phoenix_kit.update`, which discovers the chain and writes the wrapper itself.
-- **Never emit `DROP`, `TRUNCATE` or `DELETE`, and never call any of Ecto's
-  other destructive macros** (`drop`, `drop_if_exists`, `rename`, `alter ... do
-  remove ... end`) **either.** The rows are a GDPR/CCPA consent audit trail, and
-  on every current install the table is core-created; `down/1` unstamps the
-  marker and does nothing else.
-  **The test suite's coverage of this rule is partial**, not the airtight
-  guarantee the line above might suggest: `neither direction executes SQL of its
-  own` catches a literal `execute("DROP TABLE ...")` written past the builder,
-  but not `drop(table(...))`, `drop_if_exists(...)` or `rename(...)` — all
-  reach the database exactly as directly and none touch `execute(`, which is
-  the only thing that test's regex looks for. Verified, not assumed:
-  `dev_docs/reports/2026-08-19-executed-path-guard-allowlist-gap.md` reproduces
-  all three against a clean `main`, each leaving all eighteen tests in
-  `consent_logs_ownership_test.exs` green. Closing it needs an allowlist over
-  what is actually executed, not another denylist entry — that report has the
-  reasoning and what it would take.
-
-Changing the table's shape is a chain version (V2+), and it is **not** a
-free-standing change: it must follow the excluded-object protocol in the extraction
-report, because core's manifest audits the V135 shape until core's generated
-baseline excludes the altered objects. A width change that skips that step should
-fail review.
-
-## Project Overview
-
-PhoenixKit Legal — a legal compliance module for the PhoenixKit framework providing GDPR/CCPA/LGPD/PIPEDA compliant legal page generation, a cookie consent widget with Google Consent Mode v2, and consent audit logging. Implements the `PhoenixKit.Module` behaviour for auto-discovery by a parent Phoenix application. Legal pages are stored via the Publishing module.
+- **No public LiveView, controller or template.** Generated pages are Publishing
+  posts in the group slugged `"legal"`; Publishing's `/:language/:group/*path`
+  catch-all serves them at `/legal` and `/legal/:slug`, with languages,
+  translations, canonical/`og:*`/hreflang, editing and the version dropdown.
+  Adding a renderer here duplicates a path Publishing already owns.
+- **No `reserved_route_prefixes/0`.** Reserving `"legal"` removes `/legal` from
+  Publishing's dispatch while nothing replaces it, so every host that has not
+  hand-written a LiveView 404s on its legal pages.
+  `test/phoenix_kit_legal/reserved_route_prefixes_test.exs` guards this.
+- **No consent-config controller.** `GET /phoenix_kit/api/consent-config` is
+  core's route and core's controller; see Feature notes.
+- **No migration template under `priv/`.** Hosts migrate through
+  `mix phoenix_kit.update`, which discovers the chain and writes the wrapper.
+- **No background workers.** Page generation and consent logging are
+  synchronous.
+- **No second copy of the consent-log column widths.** `ConsentLog.column_widths/0`
+  is the only place the numbers exist.
 
 ## Commands
 
 ```bash
-mix deps.get                # Install dependencies
-mix test                    # Run all tests
-mix test test/file_test.exs # Run single test file
-mix test test/file_test.exs:42  # Run specific test by line
-mix format                  # Format code
-mix credo --strict          # Lint / code quality (strict mode)
-mix dialyzer                # Static type checking
-mix docs                    # Generate documentation
-mix precommit               # compile + format + credo --strict + dialyzer
-mix quality                 # format + credo --strict + dialyzer
-mix quality.ci              # format --check-formatted + credo --strict + dialyzer
+mix deps.get
+mix test                     # no database needed; this suite has no Repo and no :integration tag
+mix precommit                # compile --warnings-as-errors + format + credo --strict + dialyzer; run before every commit
 ```
+
+`mix precommit` here also runs `deps.unlock --check-unused` and `mix hex.audit`.
+`mix quality` (format + credo + dialyzer) and `mix quality.ci`
+(format --check-formatted + …) are the two halves it composes.
+
+`phoenix_kit*` deps resolve from Hex and this module does not carry the
+`pk_dep/3` helper. To run against a local core checkout, temporarily change the
+dep to `{:phoenix_kit, path: "../phoenix_kit", override: true}` in `mix.exs`,
+run `mix deps.get`, and revert **both** `mix.exs` and `mix.lock` before
+committing (switching between path and Hex resolution rewrites the lock).
+`test/core_pin_conformance_test.exs` fails on a committed `path:` override, and
+on a three-segment requirement such as `~> 2.0.3` (which admits no 2.1+ core and
+breaks consumers, never this repo).
+
+## Conventions
+
+- **Module key** is `"legal"` in every callback. Settings keys are prefixed
+  `legal_`. Page slugs and URL segments are hyphenated (`privacy-policy`,
+  `do-not-sell`, `cookie-policy`).
+- **Never hardcode paths.** Use `PhoenixKit.Utils.Routes.path/1`; there is no
+  `Legal.Paths` module. Public legal URLs pass `locale: :none` — Publishing owns
+  the language prefix.
+- **Routing:** this module registers a settings tab carrying
+  `live_view: {PhoenixKitWeb.Live.Modules.Legal.Settings, :index}`. It defines no
+  `route_module/0`, no `admin_routes/0`, no `admin_locale_routes/0`, and no
+  reserved route prefix. Never hand-register its routes in a host router.
+- **LiveView:** `use PhoenixKitWeb, :live_view` (not `use Phoenix.LiveView`),
+  followed by `use Gettext, backend: PhoenixKit.Modules.Legal.Gettext` — that
+  ordering matters, the second `use` must win. The settings template wraps its
+  body in `PhoenixKitWeb.Components.LayoutWrapper.app_layout`. Assigns available
+  in admin pages: `@phoenix_kit_current_scope`, `@current_locale`,
+  `@current_locale_base`, `@current_path`, `@url_path`, `@project_title`.
+- **Gettext:** own backend `PhoenixKit.Modules.Legal.Gettext` over
+  `priv/gettext` (`en`, `et`, `ru`, plus `default.pot`). Regenerate with
+  `mix gettext.extract --merge priv/gettext`. Strings the extractor cannot see —
+  tab labels passed to `Tab.new!(label: …)`, page titles in `@page_types` — are
+  seeded by the noop anchor `Legal.__extract_strings__/0`; add new ones there
+  before re-extracting, and review every `#, fuzzy` the merge produces.
+- **JS:** no `js_sources/0` and no LiveView hooks. `priv/static/assets/phoenix_kit_consent.js`
+  is a standalone browser script (banner, preferences modal, localStorage,
+  cross-tab sync, Google Consent Mode v2 events) reaching pages two ways: core's
+  admin layout emits `<script defer src={Routes.path("/assets/phoenix_kit_consent.js")}>`
+  and core's `AssetsController` serves the file out of this package's `priv`; on
+  host public pages `mix phoenix_kit_legal.install` adds `Plug.Static` at
+  `/phoenix_kit_legal` and an import in `assets/js/app.js`. If a real LiveView
+  hook is ever needed it ships through `js_sources/0`, never an inline
+  `<script>` — morphdom does not execute inserted script tags, so an inline hook
+  vanishes on LiveView navigation.
+- **`enabled?/0`** must survive a missing database and return `false`. It reads
+  `Settings.get_boolean_setting("legal_enabled", false)`, whose rescue in core
+  supplies that; do not replace it with a bare Repo call.
+- **Activity/audit threading:** settings writes go through
+  `Settings.update_setting_with_module(key, value, "legal")`. Page publishing
+  passes `actor_uuid:` — `publish_version/4` audits by that key and ignores the
+  `:scope` that `update_post/4` accepts, so a scope passed straight through is
+  silently dropped from the audit trail.
+- **Consent-log column widths** come from `ConsentLog.column_widths/0` and
+  nowhere else: the changeset validations, every producer, and the migration
+  chain's DDL all read that map.
+- **Count code points, not graphemes,** anywhere a value is bounded against a
+  `varchar(n)`. Postgres counts code points; `String.length/1` and
+  `validate_length/3` default to graphemes, and they disagree on combining marks
+  and ZWJ sequences (20 graphemes of `"é"` is 40 code points). Use
+  `count: :codepoints` and `String.codepoints/1`.
+- **`css_sources/0`** returns the absolute `@source_root` **only** when the
+  `:phoenix_kit_legal` atom entry does not already cover it. Do not simplify it
+  back to `[:phoenix_kit_legal, @source_root]`.
+- **Consent vocabulary:** types are `"necessary"` (always on), `"analytics"`,
+  `"marketing"`, `"preferences"`; modes are `"strict"` (opt-in, the default for
+  GDPR) and `"notice"` (opt-out/informational).
+- **Publishing must be enabled** before this module can be: `enable_system/0`
+  returns `{:error, :publishing_required}` otherwise, and creates the `"legal"`
+  group when it succeeds.
+- **Soft delete:** none here. Publishing owns trashing of legal pages;
+  `diagnose_legal_pages/0` and `reset_legal_pages/0` deal with trashed posts
+  whose slugs collide with regeneration.
+
+### Landmines
+
+- The migration chain's destructive-statement guard is a denylist over
+  `execute(`: `drop(table(...))`, `drop_if_exists(...)` and `rename(...)` reach
+  the database just as directly and leave all eighteen ownership tests green.
+  Review chain edits by hand; see
+  `dev_docs/reports/2026-08-19-executed-path-guard-allowlist-gap.md`.
+- Publishing refuses `status: "published"` through `update_post/4` and still
+  returns `{:ok, post}` — page stays a draft, public URL 404s, admin button
+  looks like it worked. Publish through `publish_version/4`, which sets status
+  and `active_version_uuid` in one transaction.
+- The page timestamp is `:content_updated_at` at the **top level** of
+  Publishing's post map; `metadata.updated_at` has never existed. Read the wrong
+  one and `updated_at` is permanently `nil`, `get_auto_policy_version/0` falls
+  back to the manual setting forever, and no visitor is ever re-prompted to
+  consent. `test/phoenix_kit_legal/policy_version_test.exs` pins the key against
+  Publishing's own mapper.
+- An over-long `legal_policy_version` is accepted at the setting and then
+  rejects **every** consent write in `ConsentLog.changeset/2` — an audit-trail
+  outage far from the change that caused it. `update_policy_version/1` bounds it
+  by `ConsentLog.column_widths().consent_version`, and `format_version_date/1`
+  falls back to `get_policy_version/0` rather than returning an unparsed
+  timestamp verbatim (an offset-less ISO8601 string with microseconds is 26
+  characters).
+- Returning both `:phoenix_kit_legal` and the absolute source root from
+  `css_sources/0` unconditionally writes the same directory twice into the
+  host's `assets/css/_phoenix_kit_sources.css`, the second time under a
+  build-machine path: core's compiler runs `Enum.uniq/1` on the raw entries (an
+  atom and a string, never equal) before formatting them. The absolute entry
+  still has to exist for `{:phoenix_kit_legal, path: "…"}` installs, hence the
+  condition rather than a deletion; `css_sources_test.exs` guards both
+  directions.
 
 ## Architecture
 
-This is a **library** (not a standalone Phoenix app) that provides legal compliance as a PhoenixKit plugin module.
+```
+lib/
+├── phoenix_kit_legal.ex                  # OTP-app entry point, version/0
+├── mix/tasks/phoenix_kit_legal.install.ex # host patcher (endpoint, app.css, app.js)
+└── phoenix_kit_legal/
+    ├── legal.ex                          # PhoenixKit.Module facade
+    ├── legal_framework.ex                # LegalFramework struct
+    ├── page_type.ex                      # PageType struct
+    ├── gettext.ex                        # module Gettext backend
+    ├── migrations.ex                     # module-owned migration chain
+    ├── schemas/consent_log.ex            # consent audit trail schema
+    ├── services/template_generator.ex    # EEx rendering
+    └── web/
+        ├── cookie_consent.ex             # Phoenix.Component (widget)
+        └── settings.ex + settings.html.heex  # admin LiveView
+priv/
+├── gettext/                              # default.pot + en, et, ru
+├── legal_templates/*.eex                 # 7 bundled page templates
+└── static/assets/phoenix_kit_consent.js  # browser consent manager
+```
 
-### Key Modules
+Key modules:
 
-- **`PhoenixKit.Modules.Legal`** (`lib/phoenix_kit_legal/legal.ex`) — Main facade implementing `PhoenixKit.Module` behaviour. Framework selection, page generation, consent widget configuration, company/DPO info management.
+- **`PhoenixKit.Modules.Legal`** — the facade: behaviour callbacks, framework
+  selection, company/DPO info, page generation and publishing, consent widget
+  config.
+- **`Legal.Migrations`** — the versioned chain (`current_version/0`,
+  `migrated_version_runtime/1`, `up/1`, `down/1`, and the testable
+  `up_statements/1` / `down_statements/2` builders).
+- **`Legal.ConsentLog`** — Ecto schema plus `column_widths/0`, `changeset/2`,
+  `create/1`, `log_consents/2`.
+- **`Legal.TemplateGenerator`** — EEx rendering with parent-app overrides.
+- **`Legal.CookieConsent`** — the glass-morphic widget component.
+- **`PhoenixKitWeb.Live.Modules.Legal.Settings`** — the admin LiveView.
 
-- **`Legal.LegalFramework`** (`lib/phoenix_kit_legal/legal_framework.ex`) — Struct representing a compliance framework (id, name, regions, consent model, required/optional pages).
+### Data model
 
-- **`Legal.PageType`** (`lib/phoenix_kit_legal/page_type.ex`) — Struct for a legal page type (slug, title, template filename, description).
+`phoenix_kit_consent_logs` (UUIDv7 PK) is the only table this module touches;
+legal pages live in Publishing's tables.
 
-- **`Legal.ConsentLog`** (`lib/phoenix_kit_legal/schemas/consent_log.ex`) — Ecto schema for consent audit trail. Tracks user/session consent decisions with timestamps, IP, and hashed user agent.
+| Column | Notes |
+|---|---|
+| `uuid` | UUIDv7 primary key |
+| `user_uuid`, `session_id` | identity — at least one is required |
+| `consent_type` | `necessary` \| `analytics` \| `marketing` \| `preferences` |
+| `consent_given` | boolean, default `false` |
+| `consent_version` | policy version at the time of consent |
+| `ip_address`, `user_agent_hash` | compliance metadata (SHA256 hash) |
+| `metadata` | JSONB, extensible |
 
-- **`Legal.TemplateGenerator`** (`lib/phoenix_kit_legal/services/template_generator.ex`) — Renders legal pages from EEx templates with company/DPO context. Supports language-specific templates and parent app overrides.
+`varchar` widths (`session_id` 64, `consent_type` 30, `consent_version` 20,
+`ip_address` 45, `user_agent_hash` 64) are declared once in
+`ConsentLog.column_widths/0`. Writes go through `ConsentLog.changeset/2`;
+`log_consents/2` wraps the whole map in one transaction, so a rejected entry
+commits none of the others. A caller already inside a transaction gets no
+return value from it — Ecto nests without a savepoint, so the rollback aborts
+the outer transaction and `{:error, errors}` surfaces there instead.
 
-- **`Legal.Web.CookieConsent`** (`lib/phoenix_kit_legal/web/cookie_consent.ex`) — Phoenix component rendering the glass-morphic cookie consent widget UI.
+### Settings keys
 
-- **`Legal.Web.Settings`** (`lib/phoenix_kit_legal/web/settings.ex`) — Admin LiveView for all legal module configuration (frameworks, company info, DPO, page generation, consent widget settings).
+| Key | Meaning |
+|---|---|
+| `legal_enabled` | module enabled flag |
+| `legal_frameworks` | JSON `{"items": ["gdpr", "ccpa"]}` |
+| `legal_company_info` | JSON: name, address, country, registration, VAT, website |
+| `legal_dpo_contact` | JSON: DPO name, email, phone, address |
+| `legal_consent_widget_enabled` | cookie consent widget on/off |
+| `legal_consent_mode` | `"strict"` or `"notice"` |
+| `legal_cookie_banner_position` | `bottom-left` \| `bottom-right` \| `top-left` \| `top-right` |
+| `legal_policy_version` | manual version string (default `"1.0"`) |
+| `legal_google_consent_mode` | Google Consent Mode v2 on/off |
+| `legal_hide_for_authenticated` | hide the widget for logged-in users |
 
-### How It Works
+### Compliance frameworks
 
-1. Parent app adds this as a dependency in `mix.exs`
-2. PhoenixKit scans `.beam` files at startup and auto-discovers modules (zero config)
-3. `settings_tabs/0` callback registers the admin settings page
-4. Settings are persisted via `PhoenixKit.Settings` API (DB-backed in parent app)
-5. Legal pages are generated from EEx templates and stored via the Publishing module as posts
-6. **Publishing serves those pages publicly** at `/legal` and `/legal/:slug` — see "Public Route Contract" below
-7. Cookie consent widget is injected client-side via `phoenix_kit_consent.js`
-8. Consent decisions are logged to `phoenix_kit_consent_logs` for GDPR audit compliance
-
-### Public Route Contract
-
-**This module renders no public pages.** It generates content into the Publishing
-group slugged `"legal"` (`@legal_blog_slug`, `legal.ex:63`); Publishing's
-`/:language/:group/*path` catch-all dispatch serves it at `/legal` (index) and
-`/legal/:slug`. The host app needs no route — the only router scope in the README
-is for the admin settings LiveView.
-
-Division of labour: **Legal generates content, Publishing renders it.** Legal has
-no public LiveView, controller, or template, and adding one would duplicate a
-rendering path Publishing already owns (languages, translations, canonical/`og:*`/
-hreflang, editing, version dropdown).
-
-**Do not implement `reserved_route_prefixes/0` in this module.** 0.1.6 did — it
-returned `["legal"]` to hand the route to a host-app LiveView that this module
-never shipped and never generated, so public legal pages 404'd on every host that
-hadn't hand-written one. Reverted in 0.1.7; `test/phoenix_kit_legal/reserved_route_prefixes_test.exs`
-guards against reintroducing it. The SEO defect that motivated it (pages
-canonicalizing to `"/"`) was fixed at its source by the `assign_url_path` plug in
-`phoenix_kit_publishing` 0.2.3.
-
-Consequences to keep in mind when changing page-generation code:
-
-- A page is only publicly reachable once its status is `"published"` — Publishing
-  404s drafts for anonymous visitors (`web/controller/post_rendering.ex:60`)
-- `get_published_legal_links/0` (`legal.ex:658`) hardcodes the `/legal/{slug}` URL
-  shape; it must stay in sync with Publishing's dispatch, and the cookie consent
-  widget shows those links to every visitor
-- Renaming `@legal_blog_slug` changes public URLs and breaks existing inbound links
-- `list_generated_pages/0` reads the page timestamp from Publishing's
-  **top-level** `:content_updated_at`, not from `:metadata`. Publishing's
-  `:metadata` map has never had an `:updated_at` key, and reading only that key
-  made the field permanently `nil` — with it `get_auto_policy_version/0`
-  permanently returned the manual setting, so editing a policy page never bumped
-  the consent version and no visitor was ever re-prompted. `test/phoenix_kit_legal/policy_version_test.exs`
-  asserts the key against Publishing's own mapper
-
-### Policy Version Contract
-
-`get_auto_policy_version/0` → `get_consent_widget_config/0` → the widget →
-`phoenix_kit_consent_logs.consent_version`, core's `varchar(20)`. Every producer
-on that chain is bounded by `ConsentLog.column_widths/0`, and an unbounded value
-anywhere on it is an audit-trail outage: the setting is accepted, and every
-consent write afterwards fails validation, far from the change that caused it.
-
-Count **code points**, not `String.length/1`'s graphemes — that is the unit
-Postgres counts for `varchar(n)`, and the two differ on combining marks and ZWJ
-sequences (20 graphemes of `"é"` is 40 code points). This applies equally to
-`validate_length/3`, whose default is graphemes; `validate_column_widths/1`
-passes `count: :codepoints`.
-
-`format_version_date/1` falls back to `get_policy_version/0` on an unparseable
-timestamp rather than returning it verbatim — an offset-less ISO8601 string with
-microseconds is 26 characters.
-
-### Consent Config Endpoint Contract
-
-`GET /phoenix_kit/api/consent-config` is **owned by core**, not by this package.
-Since `phoenix_kit` 1.7.227 core declares the route unconditionally and its
-`PhoenixKitWeb.Controllers.ConsentConfig` answers 204 when this package is absent,
-or delegates to `Legal.get_consent_widget_config/0` when it is present.
-
-**Do not define a consent-config controller here.** This package defined
-`PhoenixKitWeb.Controllers.ConsentConfigController` through 0.1.9; PR #12 removed
-it for 0.1.10. Core deliberately did *not* reuse that name — a host resolving new
-core against legal ≤ 0.1.9 would otherwise have one module compiled into two
-applications, with code-path order deciding which answers. Reintroducing either
-name here re-creates that hazard.
-
-The corollary is a release-ordering rule: deleting the controller makes core's
-version a *hard* requirement, because core declares the route whenever
-`PhoenixKit.Modules.Legal` is loaded. On any core before 1.7.227 that route still
-points at `…ConsentConfigController` — the module this package used to own — so
-every request raises `UndefinedFunctionError`, a 500 per page load, since core's
-bundled `phoenix_kit.js` fetches the endpoint on `DOMContentLoaded` whenever the
-widget root was not server-rendered. Nothing catches it at compile time: Phoenix
-compiles routes to literal tuples, so a missing controller produces no warning.
-Hence the floor cannot go below 1.7.227. The actual pin in `mix.exs`,
-`{:phoenix_kit, "~> 2.0"}`, is higher than that floor requires — raised
-independently, for reasons unrelated to this hazard (this package does not
-call core's migration internals; see the mix.exs comment above the
-dependency line) — so it satisfies the constraint without being read as
-proof the constraint sits at 2.0. If the pin is ever lowered, 1.7.227
-remains the true minimum.
-
-### Tailwind `css_sources/0` Contract
-
-`css_sources/0` (`legal.ex`) returns the absolute `@source_root` **only** when
-the `:phoenix_kit_legal` atom entry doesn't already cover it. Do not simplify it
-back to `[:phoenix_kit_legal, @source_root]`.
-
-`Mix.Tasks.Compile.PhoenixKitCssSources` in core calls `Enum.uniq/1` on the raw
-callback results — an atom and a path string, never equal — and formats them
-into `@source` lines afterwards, so returning both unconditionally wrote the
-same directory twice into the host's `assets/css/_phoenix_kit_sources.css`, once
-relative and once as a build-machine absolute path. Legal was the only module
-returning an absolute root; Publishing and AI return just the atom.
-
-The absolute entry still has to exist for `{:phoenix_kit_legal, path: "..."}`
-installs, where `../../deps/phoenix_kit_legal` doesn't resolve — hence the
-condition rather than a deletion. `test/phoenix_kit_legal/css_sources_test.exs`
-guards both directions.
-
-### Compliance Frameworks (7 total)
-
-| ID | Region | Consent Model | Required Pages |
+| ID | Region | Consent model | Required pages |
 |----|--------|---------------|----------------|
 | `gdpr` | EU/EEA | opt-in | privacy-policy, cookie-policy |
 | `uk_gdpr` | UK | opt-in | privacy-policy, cookie-policy |
@@ -219,148 +249,148 @@ guards both directions.
 | `pipeda` | Canada | opt-in | privacy-policy |
 | `generic` | Global | notice | privacy-policy |
 
-### Database Table
+### Template resolution
 
-**`phoenix_kit_consent_logs`** — consent audit trail (UUIDv7 PK). **Core's table, not
-this package's** — see the warning at the top of this file. This package reads and
-writes it and ships no DDL for it; the only table it touches, and it owns none.
-Legal pages are stored in the Publishing module's tables.
+Templates live in `priv/legal_templates/`, resolved in this order:
 
-- `uuid` (UUIDv7), `user_uuid` (optional), `session_id` (optional) — identity
-- `consent_type` — "necessary", "analytics", "marketing", or "preferences"
-- `consent_given` — boolean
-- `consent_version` — policy version string at time of consent
-- `ip_address`, `user_agent_hash` (SHA256) — compliance metadata
-- `metadata` JSONB — extensible additional data
-- Requires either `user_uuid` or `session_id` (at least one)
+1. parent app's `priv/legal_templates/{name}.{lang}.eex`
+2. bundled language-specific template
+3. parent app's `priv/legal_templates/{name}.eex`
+4. bundled base template
 
-Core's `varchar` widths are declared once, in `ConsentLog.column_widths/0` (the
-numbers are listed in the warning at the top of this file). The changeset derives
-its length validations from that map and `Legal.update_policy_version/1` reads its
-limit from it — anything else that produces a value for one of these columns
-should read it too rather than restating the number. `test/consent_logs_ownership_test.exs`
-checks the map against core's `ExpectedSchema`, so a core change surfaces as a
-failing test rather than as silent drift.
+Every template receives `@company_name`, `@company_address`, `@company_country`,
+`@company_website`, `@registration_number`, `@vat_number`, `@dpo_name`,
+`@dpo_email`, `@dpo_phone`, `@dpo_address`, `@frameworks`, `@effective_date`,
+`@language`.
 
-Writes go through `ConsentLog.changeset/2`; `log_consents/2` wraps the whole map in
-one transaction, so a rejected entry commits none of the others.
+### Public route contract
 
-### Template System
+Generated pages are Publishing posts in the group slugged `"legal"`
+(`@legal_blog_slug`). Consequences when changing page-generation code:
 
-Templates live in `priv/legal_templates/`. Resolution order:
-1. Parent app's `priv/legal_templates/{name}.{lang}.eex` (language-specific override)
-2. Bundled language-specific template
-3. Parent app's `priv/legal_templates/{name}.eex` (base override)
-4. Bundled base template
+- a page is publicly reachable only once its status is `"published"` —
+  Publishing 404s drafts for anonymous visitors;
+- `get_published_legal_links/0` hardcodes the `/legal/{slug}` URL shape and must
+  stay in sync with Publishing's dispatch; the cookie consent widget shows those
+  links to every visitor;
+- renaming `@legal_blog_slug` changes public URLs and breaks inbound links.
 
-All templates receive `@company_name`, `@company_address`, `@company_country`, `@company_website`, `@registration_number`, `@vat_number`, `@dpo_name`, `@dpo_email`, `@dpo_phone`, `@dpo_address`, `@frameworks`, `@effective_date`, `@language`.
+### Permissions
 
-### Client-Side Assets
+One permission key, `"legal"` (`permission_metadata/0`, icon `hero-scale`),
+carried by the settings tab. No sub-permissions.
 
-- **`priv/static/assets/phoenix_kit_consent.js`** — Cookie consent manager. Handles banner display, preference modal, localStorage persistence, cross-tab sync, and Google Consent Mode v2 events.
+## Database & migrations
 
-### File Layout
+Owns a versioned chain: `PhoenixKit.Modules.Legal.Migrations` via
+`migration_module/0`, marker `pkl_schema:<N>` as a COMMENT ON
+`phoenix_kit_consent_logs`, currently V1. `mix phoenix_kit.update` applies it in
+hosts; this repo's tests never run it (they inspect the statement builders
+instead).
 
-```
-lib/
-├── phoenix_kit_legal/
-│   ├── phoenix_kit_legal.ex          # Entry point, version info
-│   ├── legal.ex                      # Main module (PhoenixKit.Module behaviour)
-│   ├── legal_framework.ex            # LegalFramework struct
-│   ├── page_type.ex                  # PageType struct
-│   ├── schemas/
-│   │   └── consent_log.ex            # Consent audit trail schema
-│   ├── services/
-│   │   └── template_generator.ex     # EEx template rendering
-│   └── web/
-│       ├── cookie_consent.ex         # Phoenix component (consent widget)
-│       └── settings.ex               # Admin settings LiveView
-priv/
-├── legal_templates/                  # Bundled EEx templates (7 pages)
-│   ├── privacy_policy.eex
-│   ├── cookie_policy.eex
-│   ├── terms_of_service.eex
-│   ├── do_not_sell.eex
-│   ├── data_retention_policy.eex
-│   ├── ccpa_notice.eex
-│   └── acceptable_use.eex
-└── static/assets/
-    └── phoenix_kit_consent.js        # Client-side consent manager
-```
+The table itself ships in core's V135 baseline, so it exists on every install
+with or without this package, and core's `ExpectedSchema` still lists the table,
+its 11 columns, 6 indexes and the pkey as `owner: :core`. Both facts hold at
+once: **core creates the table and audits its current shape; this chain owns its
+future shape.** V1 is an adoption, not a create — `CREATE TABLE IF NOT EXISTS`
+with core's exact object names, then the marker — so it changes nothing core's
+manifest audits and needed no core release.
 
-## Critical Conventions
+Rules:
 
-- **Module key** must be consistent across all callbacks: `"legal"`
-- **Settings keys** are prefixed with `legal_` (e.g., `legal_enabled`, `legal_consent_mode`)
-- **Publishing dependency** — legal pages are stored as Publishing posts. The Publishing module must be available for page generation to work.
-- **`enabled?/0`** must rescue errors and return `false` as fallback (DB may not be available)
-- **LiveViews use `PhoenixKitWeb` macros** — use `use PhoenixKitWeb, :live_view` (not `use Phoenix.LiveView` directly)
-- **LiveView assigns** available in admin pages: `@phoenix_kit_current_scope`, `@current_locale`, `@url_path`
-- **Navigation paths**: always use `PhoenixKit.Utils.Routes.path/1`, never relative paths
-- **No background workers** — all operations are synchronous (page generation, consent logging)
-- **Consent types**: "necessary" (always on), "analytics", "marketing", "preferences"
-- **Consent modes**: "strict" (opt-in, default for GDPR) or "notice" (opt-out/informational)
+- **Never edit V1.** A shape change is V2+, and it needs core's generated
+  baseline to exclude the altered objects first, or `mix phoenix_kit.doctor` and
+  `mix phoenix_kit.repair` will report drift against the V135 shape.
+- **`down/1` drops nothing** — it unstamps the marker and stops. The rows are a
+  GDPR/CCPA consent audit trail and the table is core-created.
+- **The chain never emits `DROP`, `TRUNCATE` or `DELETE`, and never calls Ecto's
+  destructive macros** (`drop`, `drop_if_exists`, `rename`,
+  `alter … do remove … end`). Test coverage of this rule is partial — see
+  Landmines.
+- Every varchar width in the DDL is interpolated from
+  `ConsentLog.column_widths/0`; never restate a number.
+- Every `up/1` statement is idempotent (`IF NOT EXISTS` or a `DO` block), because
+  it runs against objects core already created.
+- A marker-less table reads as version 0. Prefixes are validated against
+  `^[a-zA-Z_][a-zA-Z0-9_]*$` before interpolation into DDL.
 
-## Settings Keys
+UUIDv7 PKs; table-backed schemas `use PhoenixKit.SchemaPrefix`
+(`test/schema_prefix_conformance_test.exs` enforces it).
 
-All stored via PhoenixKit Settings:
+## Testing
 
-- `legal_enabled` — module enabled flag
-- `legal_frameworks` — JSON `{"items": ["gdpr", "ccpa"]}` — selected frameworks
-- `legal_company_info` — JSON with company details (name, address, registration, VAT)
-- `legal_dpo_contact` — JSON with DPO details (name, email, phone, address)
-- `legal_consent_widget_enabled` — cookie consent widget enabled
-- `legal_consent_mode` — "strict" or "notice"
-- `legal_cookie_banner_position` — icon position ("bottom-left", "bottom-right", "top-left", "top-right")
-- `legal_policy_version` — manual version string (default: "1.0")
-- `legal_google_consent_mode` — Google Consent Mode v2 enabled
-- `legal_hide_for_authenticated` — hide widget for logged-in users
+`mix test` needs **no database**: there is no test Repo, no `DataCase`, no
+`config/` directory, and nothing tagged `:integration`. Tests exercise pure
+functions, rendered components and source text. Consequently the migration chain
+is verified by parsing `up_statements/1` and `down_statements/2` and by reading
+`lib/phoenix_kit_legal/migrations.ex` as text — never by running it.
 
-## Versioning & Releases
+`test/test_helper.exs`:
 
-### Tagging & GitHub releases
+- starts `PhoenixKit.Cache.Registry` and the `:settings` cache so Settings-backed
+  helpers resolve without Ecto; tests seed values with
+  `PhoenixKit.Cache.put(:settings, key, value)`;
+- excludes `:requires_phoenix_kit_i18n_api` when
+  `PhoenixKit.Dashboard.Tab.localized_label/1` is not exported. Every core the
+  current pin admits exports it, so the gate is inert today.
 
-Tags use **bare version numbers** (no `v` prefix):
+The install task's integration tests are `@moduletag :tmp_dir` and build a
+fixture Phoenix tree; they `File.cd!/1` into it, so they are `async: false`.
 
-```bash
-git tag 0.1.0
-git push origin 0.1.0
-```
+Test-writing rule this suite has been bitten by twice: **assert that a discovery
+found something before asserting the thing it found is clean.** A glob over a
+path that does not resolve returns `[]`, and a marker regex that no longer
+matches finds no schemas — both leave `offenders == []` and "no stray migration
+templates" green while checking nothing. `schema_prefix_conformance_test.exs`
+and `consent_logs_ownership_test.exs` assert the discovery first for exactly
+this reason. The mirror of it: do not add a guard on an unreachable state, which
+reads as protection and can never go red.
 
-GitHub releases are created with `gh release create` using the tag as the release name. The title format is `<version> - <date>`, and the body comes from the corresponding `CHANGELOG.md` section:
+## Feature notes
 
-```bash
-gh release create 0.1.0 \
-  --title "0.1.0 - 2026-03-27" \
-  --notes "$(changelog body for this version)"
-```
+| Feature | Constraint | Guide |
+|---|---|---|
+| Consent-log ownership | Core creates and audits `phoenix_kit_consent_logs`; this package owns its future shape through the chain. V1 must stay shape-identical to core's baseline, and a V2+ shape change needs core's excluded-object list updated first. | `dev_docs/guides/consent-logs-ownership.md` |
+| Consent config endpoint | `GET /phoenix_kit/api/consent-config` is core's route and core's controller. Never define a consent-config controller here; core ≥ 1.7.227 is the true floor (the `~> 2.0` pin satisfies it for unrelated reasons). | `dev_docs/guides/consent-logs-ownership.md` |
 
-### Full release checklist
+Root-cause records for the two public-page outages this module has had live in
+`dev_docs/reports/2026-07-25-legal-public-pages-404.md` (route reservation with
+no renderer) and `dev_docs/reports/2026-07-25-publish-page-silent-noop.md`
+(publishing through `update_post/4`).
 
-1. Update version in `mix.exs` and the version function in the main module
-2. Add changelog entry in `CHANGELOG.md`
-3. Run `mix precommit` — ensure zero warnings/errors before proceeding
-4. Commit all changes: `"Bump version to x.y.z"`
-5. Push to main and **verify the push succeeded** before tagging
-6. Create and push git tag: `git tag x.y.z && git push origin x.y.z`
-7. Create GitHub release: `gh release create x.y.z --title "x.y.z - YYYY-MM-DD" --notes "..."`
+## Versioning & releases
 
-**IMPORTANT:** Never tag or create a release before all changes are committed and pushed. Tags are immutable pointers — tagging before pushing means the release points to the wrong commit.
+SemVer. The version is single-sourced in `mix.exs` (`@version`); `version/0`
+reads it at compile time and the behaviour test asserts against
+`Mix.Project.config()[:version]`, so nothing else needs bumping.
 
-## Pull Requests
+Release procedure (the steps the maintainer runs):
 
-### Commit Message Rules
+1. Bump `@version` in `mix.exs`; add a `CHANGELOG.md` entry headed `## x.y.z - YYYY-MM-DD`.
+2. `mix precommit` clean.
+3. Commit (`"Bump version to x.y.z"`) and push; verify the push landed.
+4. `mix hex.publish`.
+5. Tag, matching the form of the newest existing tag (`git tag --sort=-creatordate | head -1` shows it), and push the tag.
+6. GitHub release via `gh release create` if the repo does those (`gh release list` shows whether it does).
 
-Start with action verbs: `Add`, `Update`, `Fix`, `Remove`, `Merge`.
+Tags are immutable pointers: never tag before the commit is pushed and the
+publish has succeeded.
 
-### PR Reviews
+## Pull requests & commits
 
-PR review files go in `dev_docs/pull_requests/{year}/{pr_number}-{slug}/` directory. Use `{AGENT}_REVIEW.md` naming (e.g., `CLAUDE_REVIEW.md`, `GEMINI_REVIEW.md`).
+- Commit messages start with an action verb (`Add`, `Update`, `Fix`, `Remove`, `Merge`). No AI attribution and no `Co-Authored-By` trailers.
+- Version bumps and CHANGELOG entries land with the release commit on upstream, not in feature PRs.
+- Review files live in `dev_docs/pull_requests/{year}/{pr_number}-{slug}/{AGENT}_REVIEW.md`, one file per reviewing agent, never edited by another agent; `FOLLOW_UP.md` records how each finding was resolved. Severities: `BUG - CRITICAL/HIGH/MEDIUM`, `IMPROVEMENT - HIGH/MEDIUM`, `NITPICK`.
 
-## External Dependencies
+## TODOs
 
-- **PhoenixKit** (`~> 1.7`) — Module behaviour, Settings API, shared components, RepoHelper
-- **PhoenixKit Publishing** — Legal page storage as posts (via Publishing module's tables)
-- **Phoenix LiveView** (`~> 1.0`) — Admin settings LiveView
-- **Ecto SQL** (`~> 3.10`) — Consent log schema
-- **Gettext** (`~> 1.0`) — Template internationalization
+- The executed-path guard in `consent_logs_ownership_test.exs` is a denylist over
+  `execute(` and misses Ecto's other destructive macros. Closing it means
+  asserting an allowlist over what the chain actually executes, which is a design
+  decision, not a patch; the reasoning and the options are in
+  `dev_docs/reports/2026-08-19-executed-path-guard-allowlist-gap.md`. Unblocked
+  when someone picks the allowlist shape.
+- `test_helper.exs` still gates `:requires_phoenix_kit_i18n_api` on
+  `Tab.localized_label/1` being exported. Every core the `~> 2.0` pin admits
+  exports it, so the gate can be deleted the next time this file is touched for
+  another reason.
