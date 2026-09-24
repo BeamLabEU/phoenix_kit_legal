@@ -246,12 +246,15 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
     # every one of them — the guard was watching the data while the function did
     # the work.
     #
-    # Checked against the source text, because this suite has no repo and cannot
-    # run a migration. That pins the shape of the implementation, not just its
-    # behaviour: rewriting `up/1` as a comprehension would fail this test even
-    # though it still only executed the builder. That is the price of checking it
-    # at all here, and it is the cheaper half of the trade — the alternative is
-    # no check on the executed path.
+    # Checked against the source text. `test/phoenix_kit_legal/migrations/
+    # adoption_integration_test.exs` now runs `up/1`/`down/1` for real against a
+    # live database, but only when one is reachable — a source-text pin still
+    # catches a mutation with no live database at all, and it pins the shape of
+    # the implementation, not just its behaviour: rewriting `up/1` as a
+    # comprehension would fail this test even though it still only executed the
+    # builder. That is the price of checking it at all here, and it is the
+    # cheaper half of the trade — the alternative is no check on the executed
+    # path that runs without a database.
     @source "lib/phoenix_kit_legal/migrations.ex"
 
     test "neither direction executes SQL of its own" do
@@ -284,6 +287,66 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
              "down/1 no longer pipes down_statements/2 into execute/1 — whatever it " <>
                "runs instead is not what `down/1 emits exactly the marker " <>
                "bookkeeping` checks"
+    end
+
+    test "up/1 calls enforce_adoption_shape!/1 before executing up_statements/1" do
+      source = File.read!(@source)
+
+      assert Regex.match?(
+               ~r/def up\(opts \\\\ \[\]\) do.*?enforce_adoption_shape!\(prefix\).*?up_statements\(\)\s*\|>\s*Enum\.each\(&execute\/1\)/s,
+               source
+             ),
+             """
+             up/1 no longer calls enforce_adoption_shape!/1 before executing
+             up_statements/1.
+
+             This is the one guard on the adoption-shape check's OWN wiring: every
+             other test in this suite exercises up_statements/1's data, not what
+             up/1 does around it, so a mutation that deletes the verify call from
+             up/1 would leave all of them green.
+             """
+    end
+
+    test "enforce_adoption_shape!/1 itself calls verify_adoption_shape/1" do
+      source = File.read!(@source)
+
+      assert Regex.match?(
+               ~r/defp enforce_adoption_shape!\(prefix\) do.*?verify_adoption_shape\(prefix\)/s,
+               source
+             ),
+             "enforce_adoption_shape!/1 no longer calls verify_adoption_shape/1 — " <>
+               "the previous test only proves up/1 calls SOMETHING named " <>
+               "enforce_adoption_shape!, not that it still reads the real shape"
+    end
+
+    test "repo().query is used only by the four designated catalog readers" do
+      source = File.read!(@source)
+
+      total_repo_query = length(Regex.scan(~r/repo\(\)\.query/, source))
+      repo_helper_repo_query = length(Regex.scan(~r/RepoHelper\.repo\(\)\.query/, source))
+      bare_repo_query = total_repo_query - repo_helper_repo_query
+
+      assert repo_helper_repo_query == 1,
+             "expected exactly one `PhoenixKit.RepoHelper.repo().query` call " <>
+               "(migrated_version_runtime/1, which reads OUTSIDE a migration) " <>
+               "in #{@source}"
+
+      assert bare_repo_query == 4,
+             """
+             expected exactly 4 bare `repo().query` calls in #{@source} — one each
+             in table_exists?/1, actual_columns/1, actual_indexes/1 and
+             actual_primary_key_columns/1, the only functions verify_adoption_shape/1
+             reads Postgres's catalogs through. A stray fifth call anywhere else
+             (up/1 itself, say) is invisible to every other test in this suite.
+             """
+
+      for fun <- ~w(table_exists? actual_columns actual_indexes actual_primary_key_columns) do
+        assert Regex.match?(
+                 ~r/defp #{Regex.escape(fun)}\(prefix\) do.*?repo\(\)\.query/s,
+                 source
+               ),
+               "#{fun}/1 no longer reads via repo().query — where did the catalog read go?"
+      end
     end
   end
 
@@ -515,27 +578,11 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
       |> Map.new()
     end
 
-    # The same shape, parsed back out of the CREATE TABLE V1 emits.
-    defp v1_columns do
-      [create | _] = Migrations.up_statements()
-
-      ~r/^\s*"(\w+)"\s+(.+?),?$/m
-      |> Regex.scan(create)
-      |> Map.new(fn [_line, name, definition] -> {name, parse_column(definition)} end)
-    end
-
-    defp parse_column(definition) do
-      {definition, not_null} =
-        case String.replace_suffix(definition, " NOT NULL", "") do
-          ^definition -> {definition, false}
-          trimmed -> {trimmed, true}
-        end
-
-      case String.split(definition, " DEFAULT ", parts: 2) do
-        [type] -> %{type: type, default: nil, not_null: not_null}
-        [type, default] -> %{type: type, default: default, not_null: not_null}
-      end
-    end
+    # The same shape, parsed back out of the CREATE TABLE V1 emits — by
+    # `Migrations.parsed_column_definitions/1`, the same parse the adoption
+    # shape check (`Migrations.parsed_expected_columns/1`) builds on. One
+    # regex over this DDL text in the whole package, not two drifting ones.
+    defp v1_columns, do: Migrations.parsed_column_definitions()
   end
 
   describe "producers respect the declared widths" do

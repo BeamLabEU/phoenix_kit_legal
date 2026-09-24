@@ -285,8 +285,8 @@ carried by the settings tab. No sub-permissions.
 Owns a versioned chain: `PhoenixKit.Modules.Legal.Migrations` via
 `migration_module/0`, marker `pkl_schema:<N>` as a COMMENT ON
 `phoenix_kit_consent_logs`, currently V1. `mix phoenix_kit.update` applies it in
-hosts; this repo's tests never run it (they inspect the statement builders
-instead).
+hosts. Most of this repo's own tests inspect the statement builders rather than
+running them; the adoption-shape check below is the exception — see Testing.
 
 The table itself ships in core's V135 baseline, so it exists on every install
 with or without this package, and core's `ExpectedSchema` still lists the table,
@@ -314,16 +314,77 @@ Rules:
 - A marker-less table reads as version 0. Prefixes are validated against
   `^[a-zA-Z_][a-zA-Z0-9_]*$` before interpolation into DDL.
 
+`CREATE TABLE IF NOT EXISTS` only proves an object with that name exists —
+never that its shape is the one this chain is about to claim ownership of
+([BeamLabEU/phoenix_kit#862](https://github.com/BeamLabEU/phoenix_kit/issues/862)).
+Before any statement in `up_statements/1` runs, `up/1` calls
+`Migrations.verify_adoption_shape/1`, which reads the existing table's actual
+columns/indexes/primary key from Postgres's own catalogs and compares them
+(via `Migrations.AdoptionShape.diff/2`) against the shape `up_statements/1`
+itself is about to create — parsed out of that same DDL by
+`parsed_expected_columns/1`, `parsed_expected_indexes/1` and
+`parsed_expected_primary_key/1`, never a hand-written second copy. On a fresh
+install (no table yet) this is a no-op.
+
+No existing column's type or width is ever changed automatically, in either
+mode below — there is no `ALTER COLUMN ... TYPE` statement anywhere in this
+chain, and narrowing an existing column by hand is the operator's call, not
+this chain's. `ALTER TABLE ... ALTER COLUMN ... TYPE character varying(N)`
+on existing data that already exceeds `N` fails outright (`value too long
+for type character varying(N)`), the same way a normal write past the
+declared width does; neither truncates. What happens on a divergence
+depends on `Migrations.adoption_shape_check_mode/0`
+(`config :phoenix_kit_legal, :adoption_shape_check`):
+
+- `:raise` (the default) raises `AdoptionShapeError` with every difference
+  found BEFORE any statement in `up_statements/1` runs — nothing executes.
+  Nothing is written — no marker — and `Ecto.Migrator` never records this
+  migration as applied, so a later `mix ecto.migrate`/`mix
+  phoenix_kit.update` retries it (reusing the migration file it already
+  generated, not writing a new one) automatically once the shape is
+  reconciled by hand.
+- `:warn` logs the same diff at `:error` level and then lets
+  `up_statements/1` run exactly as it always does, unmodified by the drift
+  — **not risk-free**: its DO-block guard still runs `ALTER TABLE ... ADD
+  CONSTRAINT ..._pkey PRIMARY KEY (uuid)` when no constraint by that exact
+  name exists, and its six `CREATE INDEX IF NOT EXISTS` statements still
+  run against whatever columns the table actually has. Against most
+  divergences these are genuinely additive and the `pkl_schema:1` marker
+  gets written despite the drift (deliberate: withholding it would leave
+  this migration pending forever, re-attempted and re-failing on every `mix
+  phoenix_kit.update`). Against some divergences they instead fail outright
+  with a raw Postgres error: an existing primary key under any OTHER name
+  collides with the `ADD CONSTRAINT` (`42P16 multiple primary keys`), and a
+  table missing a column one of the six indexes references fails that
+  `CREATE INDEX` (`42703 column ... does not exist`) — both reproduced
+  directly. `:warn` is "some shapes of this table's drift no longer block
+  the host's other migrations," not "none do."
+
+The error/log message itself (`AdoptionShape.format/1`) carries the manual
+reconciliation procedure — check existing data against the canonical width
+before narrowing anything, bring the shape to match by hand.
+
 UUIDv7 PKs; table-backed schemas `use PhoenixKit.SchemaPrefix`
 (`test/schema_prefix_conformance_test.exs` enforces it).
 
 ## Testing
 
-`mix test` needs **no database**: there is no test Repo, no `DataCase`, no
-`config/` directory, and nothing tagged `:integration`. Tests exercise pure
-functions, rendered components and source text. Consequently the migration chain
-is verified by parsing `up_statements/1` and `down_statements/2` and by reading
-`lib/phoenix_kit_legal/migrations.ex` as text — never by running it.
+The bulk of `mix test` needs **no database**: no `DataCase`, nothing but pure
+functions, rendered components and source text. Consequently most of the
+migration chain is still verified by parsing `up_statements/1` and
+`down_statements/2` and by reading `lib/phoenix_kit_legal/migrations.ex` as
+text — never by running it. The exception is
+`test/phoenix_kit_legal/migrations/adoption_integration_test.exs`
+(`@moduletag :integration`), which runs `Migrations.up/1`/`down/1` for real
+through a live `Ecto.Migrator` context against `PhoenixKit.Modules.Legal.Test.Repo`
+(`config/test.exs`) — the adoption-shape check it exercises
+(`Migrations.verify_adoption_shape/1`) reads live Postgres catalog state
+(`information_schema.columns`, `pg_indexes`, `pg_constraint`) that no
+pure-function test can stand in for. Every scenario runs inside its own
+throwaway Postgres schema (`legal_adoption_<unique>`, dropped in `on_exit`)
+so it never touches the target database's `public` schema — DDL-running
+tests live only in their own schema, in their own database, never anywhere
+shared.
 
 `test/test_helper.exs`:
 
@@ -332,7 +393,23 @@ is verified by parsing `up_statements/1` and `down_statements/2` and by reading
   `PhoenixKit.Cache.put(:settings, key, value)`;
 - excludes `:requires_phoenix_kit_i18n_api` when
   `PhoenixKit.Dashboard.Tab.localized_label/1` is not exported. Every core the
-  current pin admits exports it, so the gate is inert today.
+  current pin admits exports it, so the gate is inert today;
+- calls `PhoenixKit.Modules.Legal.Test.DatabaseGuard.validate!/1` on the
+  resolved database name before anything else — it raises unless the name is
+  this package's own disposable fixture (`phoenix_kit_legal_test`, optionally
+  partition-suffixed), never another package's or core's own test/dev
+  database. This suite runs real DDL, so the check happens before any
+  connection is attempted, not after;
+- probes `PhoenixKit.Modules.Legal.Test.Repo`'s connection once (trapping
+  exits around it — a FATAL Postgres error, e.g. bad credentials, otherwise
+  exceeds the connection supervisor's restart intensity and kills the boot
+  process outright rather than degrading gracefully) and excludes
+  `:integration` automatically when the database is unreachable, printing
+  (via `IO.puts`, not `Logger` — this file's own `config :logger, level:
+  :warning` would otherwise silently swallow it) `createdb`/`PGHOST`/
+  `PGUSER`/`PGPASSWORD` guidance. First-time setup: `createdb
+  phoenix_kit_legal_test` (or point `PGDATABASE` at an existing database —
+  see `config/test.exs`).
 
 The install task's integration tests are `@moduletag :tmp_dir` and build a
 fixture Phoenix tree; they `File.cd!/1` into it, so they are `async: false`.
