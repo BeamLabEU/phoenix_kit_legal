@@ -41,6 +41,50 @@ The migrated version is tracked as a `pkl_schema:<N>` COMMENT on
 namespaced). A marker-less table reads as version 0 — the core-baseline shape
 before this chain existed.
 
+**`IF NOT EXISTS` is not a shape check.** It proves an object with that name
+exists, never that it matches the shape this chain is about to claim
+ownership of — a table hand-narrowed outside migrations, or one built from
+one of this package's own deleted pre-0.3.0 DDL copies (the `varchar(255)`
+shape below), would otherwise adopt silently: the `pkl_schema:1` marker
+written over a shape nobody verified
+([BeamLabEU/phoenix_kit#862](https://github.com/BeamLabEU/phoenix_kit/issues/862)).
+`up/1` closes that gap: before any statement in `up_statements/1` runs, it
+calls `Migrations.verify_adoption_shape/1`, which reads the existing table's
+actual columns, indexes and primary key from Postgres's own catalogs and
+compares them (`Migrations.AdoptionShape.diff/2`) against the shape
+`up_statements/1` is about to (re-)create — parsed out of that same DDL, never
+a hand-written second copy. A fresh install (no table yet) is a no-op.
+No existing column's type or width ever changes automatically, in either
+mode below — this chain has no `ALTER COLUMN ... TYPE` statement anywhere.
+What a divergence does otherwise depends on
+`Migrations.adoption_shape_check_mode/0` (`config :phoenix_kit_legal,
+:adoption_shape_check`, default `:raise`): `:raise` raises
+`AdoptionShapeError` with every difference found before any statement in
+`up_statements/1` runs — nothing is written, and `Ecto.Migrator` never
+records the migration as applied, so a later `mix ecto.migrate` retries it
+(reusing the migration file already generated, not a new one) once the
+shape is reconciled by hand; `:warn` logs the same diff at `:error` level
+and then lets `up_statements/1` run exactly as it always does — which is
+NOT risk-free against a divergent table: its DO-block still runs
+`ALTER TABLE ... ADD CONSTRAINT ..._pkey PRIMARY KEY` when no such
+constraint exists yet (failing with `42P16 multiple primary keys` if the
+table already has one under a different name) and its six `CREATE INDEX IF
+NOT EXISTS` statements still run against whatever columns exist (failing
+with `42703 column ... does not exist` if one is missing entirely) — both
+reproduced directly. Where those succeed, the marker DOES get written
+despite the drift (otherwise `migrated_version_runtime/1` would read
+version 0 forever and this migration would stay pending, re-attempted and
+re-failing on every `mix phoenix_kit.update`); `:warn` never re-verifies
+automatically once the marker is written, so reconciling the shape stays a
+manual, operator-paced fix informed by the log in that case. `AdoptionShape.
+format/1`'s message carries that manual procedure — check existing data
+against the canonical width before narrowing a column
+(`ALTER TABLE ... ALTER COLUMN ... TYPE character varying(N)` fails outright
+on over-length existing data, the same as a normal write past the declared
+width — neither truncates), bring the shape to match; `mix
+phoenix_kit.doctor` reports the same structural divergence independently, as
+a second opinion, not a fix.
+
 ### What the chain must never do
 
 Pinned by `test/consent_logs_ownership_test.exs`, to the degree each bullet
