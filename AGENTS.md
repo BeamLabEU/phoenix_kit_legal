@@ -85,7 +85,7 @@ breaks consumers, never this repo).
   in admin pages: `@phoenix_kit_current_scope`, `@current_locale`,
   `@current_locale_base`, `@current_path`, `@url_path`, `@project_title`.
 - **Gettext:** own backend `PhoenixKit.Modules.Legal.Gettext` over
-  `priv/gettext` (`en`, `et`, `ru`, plus `default.pot`). Regenerate with
+  `priv/gettext` (`de`, `en`, `et`, `fr`, `ru`, plus `default.pot`). Regenerate with
   `mix gettext.extract --merge priv/gettext`. Strings the extractor cannot see —
   tab labels passed to `Tab.new!(label: …)`, page titles in `@page_types` — are
   seeded by the noop anchor `Legal.__extract_strings__/0`; add new ones there
@@ -180,7 +180,7 @@ lib/
         ├── cookie_consent.ex             # Phoenix.Component (widget)
         └── settings.ex + settings.html.heex  # admin LiveView
 priv/
-├── gettext/                              # default.pot + en, et, ru
+├── gettext/                              # default.pot + de, en, et, fr, ru
 ├── legal_templates/*.eex                 # 7 bundled page templates
 └── static/assets/phoenix_kit_consent.js  # browser consent manager
 ```
@@ -324,7 +324,10 @@ columns/indexes/primary key from Postgres's own catalogs and compares them
 itself is about to create — parsed out of that same DDL by
 `parsed_expected_columns/1`, `parsed_expected_indexes/1` and
 `parsed_expected_primary_key/1`, never a hand-written second copy. On a fresh
-install (no table yet) this is a no-op.
+install (no table yet) this is a no-op, and on a table already carrying a
+`pkl_schema:<N>` marker it is skipped: the check verifies adoption, and every
+later `up/1` is an upgrade whose V2+ statements legitimately declare objects
+the table does not have yet.
 
 No existing column's type or width is ever changed automatically, in either
 mode below — there is no `ALTER COLUMN ... TYPE` statement anywhere in this

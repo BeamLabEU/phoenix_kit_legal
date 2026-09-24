@@ -196,6 +196,29 @@ defmodule PhoenixKit.Modules.Legal.Migrations.AdoptionIntegrationTest do
     end
   end
 
+  describe "an already-adopted table (pkl_schema marker present)" do
+    test "a later up/1 skips the shape check, even under :raise, and leaves the drift alone",
+         %{schema: schema} do
+      create_canonical_table(schema)
+      run_up(schema, 1)
+      assert marker(schema) == "pkl_schema:1"
+
+      # Drift introduced AFTER adoption stands in for what a V2 upgrade
+      # looks like to the check: up_statements/1 declaring something the
+      # adopted table does not have yet. Re-verifying here would raise on
+      # every already-adopted install instead of upgrading it.
+      Repo.query!("""
+      ALTER TABLE #{schema}.phoenix_kit_consent_logs
+      ALTER COLUMN session_id TYPE character varying(255)
+      """)
+
+      run_up(schema, 2)
+
+      assert marker(schema) == "pkl_schema:1"
+      assert session_id_max_length(schema) == 255
+    end
+  end
+
   describe "a failed migration under :raise is not recorded as applied" do
     test "a normal retry with the SAME version succeeds once the table is reconciled by hand",
          %{schema: schema} do

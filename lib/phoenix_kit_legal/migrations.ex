@@ -71,7 +71,8 @@ defmodule PhoenixKit.Modules.Legal.Migrations do
   ownership of by stamping `pkl_schema:1` (core issue #862: an adoption step
   built only from `IF NOT EXISTS` guards lets a hand-narrowed column, or a
   host that ran this package's pre-0.3.0 `varchar(255)` DDL copies, pass
-  silently). Before `up/1` runs any statement, it reads the existing table's
+  silently). Before `up/1` runs any statement against a table that carries
+  no `pkl_schema:<N>` marker yet (later upgrades skip it), it reads the existing table's
   actual shape and compares it against the shape `up_statements/1` is about
   to (re-)create — parsed out of that same DDL by `parsed_expected_columns/1`,
   `parsed_expected_indexes/1` and `parsed_expected_primary_key/1`, so there is
@@ -171,19 +172,8 @@ defmodule PhoenixKit.Modules.Legal.Migrations do
   def migrated_version_runtime(opts \\ []) do
     prefix = validated_prefix(opts)
 
-    # classoid anchors the description join to pg_class (the projects
-    # chain's convention, via document_creator).
-    query = """
-    SELECT d.description
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    LEFT JOIN pg_description d
-      ON d.objoid = c.oid AND d.objsubid = 0 AND d.classoid = 'pg_class'::regclass
-    WHERE n.nspname = $1 AND c.relname = '#{@version_table}' AND c.relkind = 'r'
-    """
-
-    case PhoenixKit.RepoHelper.repo().query(query, [prefix]) do
-      {:ok, %{rows: [[@marker_prefix <> n]]}} -> parse_version(n)
+    case PhoenixKit.RepoHelper.repo().query(marker_query(), [prefix]) do
+      {:ok, result} -> marker_version(result)
       _ -> 0
     end
   rescue
@@ -193,8 +183,12 @@ defmodule PhoenixKit.Modules.Legal.Migrations do
   @doc """
   Applies every chain version up to `current_version/0` (idempotent).
 
-  Checks an EXISTING table's shape before running any statement below —
-  see the moduledoc, "Adoption verifies shape, not just existence".
+  Checks an EXISTING, not-yet-adopted table's shape before running any
+  statement below — see the moduledoc, "Adoption verifies shape, not just
+  existence". A table already carrying a `pkl_schema:<N>` marker skips the
+  check: it was adopted once, and every later `up/1` call is an upgrade
+  whose `up_statements/1` legitimately declares objects the table does not
+  have yet.
   `adoption_shape_check_mode/0` decides what a drift does: under the
   default `:raise`, `enforce_adoption_shape!/1` raises `AdoptionShapeError`
   here and nothing below ever runs. Under `:warn`, it logs and returns —
@@ -421,21 +415,47 @@ defmodule PhoenixKit.Modules.Legal.Migrations do
   # this still returns :ok, so `up_statements/1` runs anyway and writes
   # the marker despite the drift — see the moduledoc for why that is the
   # deliberate behavior, not an oversight.
+  #
+  # Adoption-only: once the marker is stamped, core's updater still calls
+  # `up/1` for every later version, and a V2 that adds an index or column
+  # would otherwise read as `:missing_index`/`:missing_column` drift on
+  # every V1 install and block the upgrade under `:raise`.
   @spec enforce_adoption_shape!(String.t()) :: :ok
   defp enforce_adoption_shape!(prefix) do
-    case verify_adoption_shape(prefix) do
-      :ok ->
-        :ok
-
-      {:drift, diffs} ->
-        case adoption_shape_check_mode() do
-          :raise -> raise AdoptionShapeError, diffs
-          :warn -> Logger.error(AdoptionShape.format(diffs))
-        end
-
-        :ok
+    with 0 <- adopted_version(prefix),
+         {:drift, diffs} <- verify_adoption_shape(prefix) do
+      case adoption_shape_check_mode() do
+        :raise -> raise AdoptionShapeError, diffs
+        :warn -> Logger.error(AdoptionShape.format(diffs))
+      end
     end
+
+    :ok
   end
+
+  # The marker as read INSIDE a migration — the runner's own connection,
+  # the same query `migrated_version_runtime/1` runs outside one.
+  defp adopted_version(prefix) do
+    marker_query()
+    |> then(&repo().query!(&1, [prefix]))
+    |> marker_version()
+  end
+
+  # classoid anchors the description join to pg_class (the projects
+  # chain's convention, via document_creator).
+  defp marker_query do
+    """
+    SELECT d.description
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_description d
+      ON d.objoid = c.oid AND d.objsubid = 0 AND d.classoid = 'pg_class'::regclass
+    WHERE n.nspname = $1 AND c.relname = '#{@version_table}' AND c.relkind = 'r'
+    """
+  end
+
+  defp marker_version(%{rows: [[@marker_prefix <> n]]}), do: parse_version(n)
+  defp marker_version(_result), do: 0
 
   defp table_exists?(prefix) do
     query = """

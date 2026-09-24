@@ -53,7 +53,9 @@ calls `Migrations.verify_adoption_shape/1`, which reads the existing table's
 actual columns, indexes and primary key from Postgres's own catalogs and
 compares them (`Migrations.AdoptionShape.diff/2`) against the shape
 `up_statements/1` is about to (re-)create — parsed out of that same DDL, never
-a hand-written second copy. A fresh install (no table yet) is a no-op.
+a hand-written second copy. A fresh install (no table yet) is a no-op, and a
+table already carrying a `pkl_schema:<N>` marker skips the check — it verifies
+adoption, not later upgrades.
 No existing column's type or width ever changes automatically, in either
 mode below — this chain has no `ALTER COLUMN ... TYPE` statement anywhere.
 What a divergence does otherwise depends on

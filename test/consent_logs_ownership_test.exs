@@ -307,6 +307,24 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
              """
     end
 
+    test "enforce_adoption_shape!/1 only verifies a table that carries no marker yet" do
+      source = File.read!(@source)
+
+      assert Regex.match?(
+               ~r/defp enforce_adoption_shape!\(prefix\) do\s*with 0 <- adopted_version\(prefix\),\s*\{:drift, diffs\} <- verify_adoption_shape\(prefix\)/,
+               source
+             ),
+             """
+             enforce_adoption_shape!/1 no longer gates the shape check on the
+             pkl_schema marker being absent.
+
+             The check verifies ADOPTION. Core's updater calls up/1 again for every
+             later chain version, and a V2 whose up_statements/1 adds an index or a
+             column would read as drift on every already-adopted V1 install and
+             block its upgrade under the default :raise.
+             """
+    end
+
     test "enforce_adoption_shape!/1 itself calls verify_adoption_shape/1" do
       source = File.read!(@source)
 
@@ -319,7 +337,7 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
                "enforce_adoption_shape!, not that it still reads the real shape"
     end
 
-    test "repo().query is used only by the four designated catalog readers" do
+    test "repo().query is used only by the five designated catalog readers" do
       source = File.read!(@source)
 
       total_repo_query = length(Regex.scan(~r/repo\(\)\.query/, source))
@@ -331,16 +349,18 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogsOwnershipTest do
                "(migrated_version_runtime/1, which reads OUTSIDE a migration) " <>
                "in #{@source}"
 
-      assert bare_repo_query == 4,
+      assert bare_repo_query == 5,
              """
-             expected exactly 4 bare `repo().query` calls in #{@source} — one each
-             in table_exists?/1, actual_columns/1, actual_indexes/1 and
+             expected exactly 5 bare `repo().query` calls in #{@source} — one each
+             in adopted_version/1 (the marker gate in enforce_adoption_shape!/1)
+             and in table_exists?/1, actual_columns/1, actual_indexes/1 and
              actual_primary_key_columns/1, the only functions verify_adoption_shape/1
-             reads Postgres's catalogs through. A stray fifth call anywhere else
+             reads Postgres's catalogs through. A stray sixth call anywhere else
              (up/1 itself, say) is invisible to every other test in this suite.
              """
 
-      for fun <- ~w(table_exists? actual_columns actual_indexes actual_primary_key_columns) do
+      for fun <-
+            ~w(adopted_version table_exists? actual_columns actual_indexes actual_primary_key_columns) do
         assert Regex.match?(
                  ~r/defp #{Regex.escape(fun)}\(prefix\) do.*?repo\(\)\.query/s,
                  source

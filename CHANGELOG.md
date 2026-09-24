@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0 - 2026-09-24
+
+### Added
+
+- **Adoption-shape check for `phoenix_kit_consent_logs`** (#23,
+  BeamLabEU/phoenix_kit#862). Before V1 stamps the `pkl_schema:1` marker on an
+  existing table, `Migrations.up/1` now reads the table's columns, widths,
+  nullability, indexes and primary key from Postgres's catalogs and diffs them
+  against the shape parsed from its own DDL. On drift it either raises
+  `AdoptionShapeError` with the exact diff and a manual reconciliation
+  procedure (the default, `:raise`), or logs the diff and proceeds (`:warn`).
+  Configure with `config :phoenix_kit_legal, :adoption_shape_check`. No
+  column is ever altered automatically. Tables that already carry the marker
+  skip the check, so later chain versions upgrade normally.
+- French and German translations (#21).
+- A Postgres-backed `:integration` test suite for the migration chain. It is
+  excluded automatically when no database is reachable, and it refuses any
+  database other than `phoenix_kit_legal_test`.
+
+### Changed
+
+- Rewrote `AGENTS.md` onto the shared module skeleton and moved the
+  consent-log ownership record into `dev_docs/guides/consent-logs-ownership.md`
+  (#22).
+- Dependency updates: `phoenix_kit` 2.38.1, `phoenix_kit_publishing` 0.11.0,
+  `phoenix_live_view` 1.2.12, and the transitive set they pull.
+
 ## 0.4.3 - 2026-08-19
 
 ### Changed
