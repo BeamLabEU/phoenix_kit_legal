@@ -41,7 +41,12 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     socket =
       socket
       |> assign(:project_title, Settings.get_project_title())
-      |> assign(:page_title, gettext("Legal Settings"))
+      |> assign(:page_title, gettext("Legal"))
+      |> assign(:page_section, gettext("Settings"))
+      |> assign(
+        :page_section_path,
+        Routes.path("/admin/settings", locale: socket.assigns[:current_locale_base])
+      )
       |> assign(
         :current_path,
         Routes.path("/admin/settings/legal", locale: socket.assigns[:current_locale_base])

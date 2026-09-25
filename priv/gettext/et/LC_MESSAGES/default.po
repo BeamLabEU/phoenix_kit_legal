@@ -11,662 +11,667 @@ msgstr ""
 "Language: et\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: lib/phoenix_kit_legal/legal.ex:1018
+#: lib/phoenix_kit_legal/legal.ex:1156
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:279
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:418
+#: lib/phoenix_kit_legal/web/settings.ex:44
 #, elixir-autogen
 msgid "Legal"
 msgstr "Õigusdokumendid"
 
-#: lib/phoenix_kit_legal/legal.ex:617
+#: lib/phoenix_kit_legal/legal.ex:648
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:306
-#: lib/phoenix_kit_legal/web/settings.html.heex:827
+#: lib/phoenix_kit_legal/web/settings.html.heex:813
 #, elixir-autogen, elixir-format
 msgid "Accept All"
 msgstr "Nõustu kõigega"
 
-#: lib/phoenix_kit_legal/legal.ex:1026
+#: lib/phoenix_kit_legal/legal.ex:1164
 #, elixir-autogen, elixir-format
 msgid "Acceptable Use Policy"
 msgstr "Lubatud kasutuse poliitika"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:392
+#: lib/phoenix_kit_legal/web/settings.html.heex:394
 #, elixir-autogen, elixir-format
 msgid "Actions"
 msgstr "Toimingud"
 
-#: lib/phoenix_kit_legal/web/settings.ex:128
+#: lib/phoenix_kit_legal/web/settings.ex:133
 #, elixir-autogen, elixir-format
 msgid "Address imported from Organization"
 msgstr "Aadress imporditud organisatsiooni seadetest"
 
-#: lib/phoenix_kit_legal/legal.ex:633
+#: lib/phoenix_kit_legal/legal.ex:664
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:49
 #, elixir-autogen, elixir-format
 msgid "Analytics"
 msgstr "Analüütika"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:708
+#: lib/phoenix_kit_legal/web/settings.html.heex:702
 #, elixir-autogen, elixir-format
 msgid "Auto-calculated from Cookie/Privacy Policy update dates"
 msgstr "Arvutatakse automaatselt küpsiste-/privaatsuspoliitika uuendamise kuupäevadest"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:656
+#: lib/phoenix_kit_legal/web/settings.html.heex:658
 #, elixir-autogen, elixir-format
 msgid "Bottom Left"
 msgstr "All vasakul"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:657
+#: lib/phoenix_kit_legal/web/settings.html.heex:659
 #, elixir-autogen, elixir-format
 msgid "Bottom Right"
 msgstr "All paremal"
 
-#: lib/phoenix_kit_legal/legal.ex:1025
+#: lib/phoenix_kit_legal/legal.ex:1163
 #, elixir-autogen, elixir-format
 msgid "CCPA Notice at Collection"
 msgstr "CCPA teade andmete kogumise hetkel"
 
-#: lib/phoenix_kit_legal/legal.ex:620
+#: lib/phoenix_kit_legal/legal.ex:651
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:352
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr "Sulge"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:84
+#: lib/phoenix_kit_legal/web/settings.html.heex:86
 #, elixir-autogen, elixir-format
 msgid "Company Information"
 msgstr "Ettevõtte andmed"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:117
+#: lib/phoenix_kit_legal/web/settings.html.heex:119
 #, elixir-autogen, elixir-format
 msgid "Company information not configured"
 msgstr "Ettevõtte andmed ei ole seadistatud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:53
+#: lib/phoenix_kit_legal/web/settings.html.heex:55
 #, elixir-autogen, elixir-format
 msgid "Compliance Frameworks"
 msgstr "Vastavusraamistikud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:14
+#: lib/phoenix_kit_legal/web/settings.html.heex:16
 #, elixir-autogen, elixir-format
 msgid "Configure compliance frameworks, company information, and generate legal pages."
 msgstr "Seadista vastavusraamistikud ja ettevõtte andmed ning genereeri õigusdokumentide lehed."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:516
+#: lib/phoenix_kit_legal/web/settings.html.heex:518
 #, elixir-autogen, elixir-format
 msgid "Configure the cookie consent banner for your website visitors."
 msgstr "Seadista küpsiste nõusolekuriba veebisaidi külastajatele."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:571
+#: lib/phoenix_kit_legal/web/settings.html.heex:573
 #, elixir-autogen, elixir-format
 msgid "Consent Mode"
 msgstr "Nõusolekurežiim"
 
-#: lib/phoenix_kit_legal/web/settings.ex:307
+#: lib/phoenix_kit_legal/web/settings.ex:315
 #, elixir-autogen, elixir-format
 msgid "Consent widget settings saved"
 msgstr "Nõusolekuvidina seaded salvestatud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:513
+#: lib/phoenix_kit_legal/web/settings.html.heex:515
 #, elixir-autogen, elixir-format
 msgid "Cookie Consent Widget"
 msgstr "Küpsiste nõusolekuvidin"
 
-#: lib/phoenix_kit_legal/legal.ex:625
-#: lib/phoenix_kit_legal/legal.ex:1021
-#: lib/phoenix_kit_legal/web/settings.html.heex:814
+#: lib/phoenix_kit_legal/legal.ex:656
+#: lib/phoenix_kit_legal/legal.ex:1159
+#: lib/phoenix_kit_legal/web/settings.html.heex:800
 #, elixir-autogen, elixir-format
 msgid "Cookie Policy"
 msgstr "Küpsiste poliitika"
 
-#: lib/phoenix_kit_legal/legal.ex:614
+#: lib/phoenix_kit_legal/legal.ex:645
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:254
 #, elixir-autogen, elixir-format
 msgid "Cookie consent"
 msgstr "Küpsiste nõusolek"
 
-#: lib/phoenix_kit_legal/web/settings.ex:266
+#: lib/phoenix_kit_legal/web/settings.ex:274
 #, elixir-autogen, elixir-format
 msgid "Cookie consent widget disabled"
 msgstr "Küpsiste nõusolekuvidin keelatud"
 
-#: lib/phoenix_kit_legal/web/settings.ex:280
+#: lib/phoenix_kit_legal/web/settings.ex:288
 #, elixir-autogen, elixir-format
 msgid "Cookie consent widget enabled"
 msgstr "Küpsiste nõusolekuvidin lubatud"
 
-#: lib/phoenix_kit_legal/legal.ex:626
+#: lib/phoenix_kit_legal/legal.ex:657
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:240
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:241
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:319
-#: lib/phoenix_kit_legal/web/settings.html.heex:781
+#: lib/phoenix_kit_legal/web/settings.html.heex:767
 #, elixir-autogen, elixir-format
 msgid "Cookie preferences"
 msgstr "Küpsiste eelistused"
 
-#: lib/phoenix_kit_legal/legal.ex:615
+#: lib/phoenix_kit_legal/legal.ex:646
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:292
-#: lib/phoenix_kit_legal/web/settings.html.heex:821
+#: lib/phoenix_kit_legal/web/settings.html.heex:807
 #, elixir-autogen, elixir-format
 msgid "Customize"
 msgstr "Kohanda"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:262
+#: lib/phoenix_kit_legal/web/settings.html.heex:264
 #, elixir-autogen, elixir-format
 msgid "DPO Address"
 msgstr "DPO aadress"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:218
+#: lib/phoenix_kit_legal/web/settings.html.heex:220
 #, elixir-autogen, elixir-format
 msgid "DPO Email"
 msgstr "DPO e-post"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:206
+#: lib/phoenix_kit_legal/web/settings.html.heex:208
 #, elixir-autogen, elixir-format
 msgid "DPO Name"
 msgstr "DPO nimi"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:250
+#: lib/phoenix_kit_legal/web/settings.html.heex:252
 #, elixir-autogen, elixir-format
 msgid "DPO Phone"
 msgstr "DPO telefon"
 
-#: lib/phoenix_kit_legal/web/settings.ex:149
+#: lib/phoenix_kit_legal/web/settings.ex:154
 #, elixir-autogen, elixir-format
 msgid "DPO contact saved"
 msgstr "DPO kontakt salvestatud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:197
+#: lib/phoenix_kit_legal/web/settings.html.heex:199
 #, elixir-autogen, elixir-format
 msgid "Data Protection Officer (DPO)"
 msgstr "Andmekaitsespetsialist (DPO)"
 
-#: lib/phoenix_kit_legal/legal.ex:1024
+#: lib/phoenix_kit_legal/legal.ex:1162
 #, elixir-autogen, elixir-format
 msgid "Data Retention Policy"
 msgstr "Andmete säilitamise poliitika"
 
-#: lib/phoenix_kit_legal/legal.ex:1023
+#: lib/phoenix_kit_legal/legal.ex:1161
 #, elixir-autogen, elixir-format
 msgid "Do Not Sell My Personal Information"
 msgstr "Ärge müüge minu isikuandmeid"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:688
+#: lib/phoenix_kit_legal/web/settings.html.heex:683
 #, elixir-autogen, elixir-format
 msgid "Don't show consent banner to logged-in users (they agreed via Terms)"
 msgstr "Ära näita nõusolekuriba sisselogitud kasutajatele (nad nõustusid tingimustega)"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:447
+#: lib/phoenix_kit_legal/web/settings.html.heex:449
 #, elixir-autogen, elixir-format
 msgid "Edit"
 msgstr "Muuda"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:95
+#: lib/phoenix_kit_legal/web/settings.html.heex:97
 #, elixir-autogen, elixir-format
 msgid "Edit Organization"
 msgstr "Muuda organisatsiooni"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:104
+#: lib/phoenix_kit_legal/web/settings.html.heex:106
 #, elixir-autogen, elixir-format
 msgid "Edit Site URL"
 msgstr "Muuda saidi URL-i"
 
-#: lib/phoenix_kit_legal/web/settings.ex:111
+#: lib/phoenix_kit_legal/web/settings.ex:116
 #, elixir-autogen, elixir-format
 msgid "Email imported from General Settings"
 msgstr "E-post imporditud üldsätetest"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:522
+#: lib/phoenix_kit_legal/web/settings.html.heex:524
 #, elixir-autogen, elixir-format
 msgid "Enable Cookie Banner"
 msgstr "Luba küpsiseriba"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:44
+#: lib/phoenix_kit_legal/web/settings.html.heex:46
 #, elixir-autogen, elixir-format
 msgid "Enable Publishing"
 msgstr "Luba avaldamise moodul"
 
-#: lib/phoenix_kit_legal/legal.ex:629
+#: lib/phoenix_kit_legal/legal.ex:660
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:42
 #, elixir-autogen, elixir-format
 msgid "Essential"
 msgstr "Vajalikud"
 
-#: lib/phoenix_kit_legal/web/settings.ex:179
+#: lib/phoenix_kit_legal/web/settings.ex:184
 #, elixir-autogen, elixir-format
 msgid "Failed to generate page: %{reason}"
 msgstr "Lehe genereerimine ebaõnnestus: %{reason}"
 
-#: lib/phoenix_kit_legal/web/settings.ex:131
+#: lib/phoenix_kit_legal/web/settings.ex:136
 #, elixir-autogen, elixir-format
 msgid "Failed to import address"
 msgstr "Aadressi importimine ebaõnnestus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:114
+#: lib/phoenix_kit_legal/web/settings.ex:119
 #, elixir-autogen, elixir-format
 msgid "Failed to import email"
 msgstr "E-posti importimine ebaõnnestus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:199
+#: lib/phoenix_kit_legal/web/settings.ex:204
 #, elixir-autogen, elixir-format
 msgid "Failed to publish page: %{reason}"
 msgstr "Lehe avaldamine ebaõnnestus: %{reason}"
 
-#: lib/phoenix_kit_legal/web/settings.ex:152
+#: lib/phoenix_kit_legal/web/settings.ex:157
 #, elixir-autogen, elixir-format
 msgid "Failed to save DPO contact"
 msgstr "DPO kontakti salvestamine ebaõnnestus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:97
+#: lib/phoenix_kit_legal/web/settings.ex:102
 #, elixir-autogen, elixir-format
 msgid "Failed to save frameworks"
 msgstr "Raamistike salvestamine ebaõnnestus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:310
+#: lib/phoenix_kit_legal/web/settings.ex:318
 #, elixir-autogen, elixir-format
 msgid "Failed to save settings"
 msgstr "Seadete salvestamine ebaõnnestus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:269
-#: lib/phoenix_kit_legal/web/settings.ex:283
+#: lib/phoenix_kit_legal/web/settings.ex:277
+#: lib/phoenix_kit_legal/web/settings.ex:291
 #, elixir-autogen, elixir-format
 msgid "Failed to update setting"
 msgstr "Seade uuendamine ebaõnnestus"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:638
+#: lib/phoenix_kit_legal/web/settings.html.heex:640
 #, elixir-autogen, elixir-format
 msgid "Floating icon will NOT be shown"
 msgstr "Hõljuvat ikooni EI kuvata"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:632
+#: lib/phoenix_kit_legal/web/settings.html.heex:634
 #, elixir-autogen, elixir-format
 msgid "Floating icon will be shown"
 msgstr "Hõljuv ikoon kuvatakse"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:586
+#: lib/phoenix_kit_legal/web/settings.html.heex:588
 #, elixir-autogen, elixir-format
 msgid "Full GDPR compliance: floating icon, script blocking, re-consent on policy updates"
 msgstr "Täielik GDPR-vastavus: hõljuv ikoon, skriptide blokeerimine, korduv nõusolek poliitika muutudes"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:468
+#: lib/phoenix_kit_legal/web/settings.html.heex:470
 #, elixir-autogen, elixir-format
 msgid "Generate"
 msgstr "Genereeri"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:357
+#: lib/phoenix_kit_legal/web/settings.html.heex:359
 #, elixir-autogen, elixir-format
 msgid "Generate All Required Pages"
 msgstr "Genereeri kõik nõutud lehed"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:330
+#: lib/phoenix_kit_legal/web/settings.html.heex:332
 #, elixir-autogen, elixir-format
 msgid "Generate legal pages based on selected frameworks."
 msgstr "Genereeri õigusdokumentide lehed valitud raamistike põhjal."
 
-#: lib/phoenix_kit_legal/web/settings.ex:221
+#: lib/phoenix_kit_legal/web/settings.ex:229
 #, elixir-autogen, elixir-format
 msgid "Generated %{count} pages"
 msgstr "Genereeritud lehti: %{count}"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:496
+#: lib/phoenix_kit_legal/web/settings.html.heex:498
 #, elixir-autogen, elixir-format
 msgid "Generated pages are drafts. Have them reviewed by a legal professional before publishing."
 msgstr "Genereeritud lehed on mustandid. Lase juristil need enne avaldamist üle vaadata."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:119
+#: lib/phoenix_kit_legal/web/settings.html.heex:121
 #, elixir-autogen, elixir-format
 msgid "Go to Settings → Organization to set up your company details."
 msgstr "Mine Seaded → Organisatsioon, et täita ettevõtte andmed."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:557
+#: lib/phoenix_kit_legal/web/settings.html.heex:559
 #, elixir-autogen, elixir-format
 msgid "Go to the Legal Pages section below to generate and publish them."
 msgstr "Mine allpool olevasse õigusdokumentide sektsiooni, et need genereerida ja avaldada."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:725
+#: lib/phoenix_kit_legal/web/settings.html.heex:712
 #, elixir-autogen, elixir-format
 msgid "Google Consent Mode v2"
 msgstr "Google Consent Mode v2"
 
-#: lib/phoenix_kit_legal/legal.ex:635
+#: lib/phoenix_kit_legal/legal.ex:666
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:52
 #, elixir-autogen, elixir-format
 msgid "Help us understand how you use our site to improve your experience."
 msgstr "Aitavad meil mõista, kuidas meie saiti kasutate, et paremat kogemust pakkuda."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:685
+#: lib/phoenix_kit_legal/web/settings.html.heex:680
 #, elixir-autogen, elixir-format
 msgid "Hide for authenticated users"
 msgstr "Peida sisselogitud kasutajate eest"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:650
+#: lib/phoenix_kit_legal/web/settings.html.heex:652
 #, elixir-autogen, elixir-format
 msgid "Icon Position"
 msgstr "Ikooni asukoht"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:285
+#: lib/phoenix_kit_legal/web/settings.html.heex:287
 #, elixir-autogen, elixir-format
 msgid "Import available from Organization"
 msgstr "Saadaval import organisatsiooni seadetest"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:242
+#: lib/phoenix_kit_legal/web/settings.html.heex:244
 #, elixir-autogen, elixir-format
 msgid "Import available:"
 msgstr "Saadaval import:"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:276
+#: lib/phoenix_kit_legal/web/settings.html.heex:278
 #, elixir-autogen, elixir-format
 msgid "Import from Company Address"
 msgstr "Impordi ettevõtte aadressist"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:233
+#: lib/phoenix_kit_legal/web/settings.html.heex:235
 #, elixir-autogen, elixir-format
 msgid "Import from General Settings"
 msgstr "Impordi üldsätetest"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:728
+#: lib/phoenix_kit_legal/web/settings.html.heex:715
 #, elixir-autogen, elixir-format
 msgid "Integrate with Google Analytics/Ads consent signals"
 msgstr "Integreeri Google Analytics/Ads nõusolekusignaalidega"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:306
+#: lib/phoenix_kit_legal/web/settings.html.heex:308
 #, elixir-autogen, elixir-format
 msgid "Issues detected with legal pages"
 msgstr "Õigusdokumentide lehtedega tuvastati probleeme"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:328
+#: lib/phoenix_kit_legal/web/settings.html.heex:330
 #, elixir-autogen, elixir-format
 msgid "Legal Pages"
 msgstr "Õigusdokumentide lehed"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:494
+#: lib/phoenix_kit_legal/web/settings.html.heex:496
 #, elixir-autogen, elixir-format
 msgid "Legal Review Required"
 msgstr "Vajalik on juriidiline ülevaatus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:44
-#: lib/phoenix_kit_legal/web/settings.html.heex:12
+#: lib/phoenix_kit_legal/web/settings.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Legal Settings"
 msgstr "Õigusdokumentide seaded"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:552
+#: lib/phoenix_kit_legal/web/settings.html.heex:554
 #, elixir-autogen, elixir-format
 msgid "Legal pages not published"
 msgstr "Õigusdokumentide lehed ei ole avaldatud"
 
-#: lib/phoenix_kit_legal/web/settings.ex:241
+#: lib/phoenix_kit_legal/web/settings.ex:249
 #, elixir-autogen, elixir-format
 msgid "Legal pages reset successfully. You can now regenerate them."
 msgstr "Õigusdokumentide lehed lähtestati. Nüüd saad need uuesti genereerida."
 
-#: lib/phoenix_kit_legal/legal.ex:619
+#: lib/phoenix_kit_legal/legal.ex:650
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:344
 #, elixir-autogen, elixir-format
 msgid "Manage your cookie settings"
 msgstr "Halda oma küpsiste seadeid"
 
-#: lib/phoenix_kit_legal/legal.ex:638
+#: lib/phoenix_kit_legal/legal.ex:669
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:56
 #, elixir-autogen, elixir-format
 msgid "Marketing"
 msgstr "Turundus"
 
-#: lib/phoenix_kit_legal/web/settings.ex:245
+#: lib/phoenix_kit_legal/web/settings.ex:253
 #, elixir-autogen, elixir-format
 msgid "No issues detected — reset not needed"
 msgstr "Probleeme ei tuvastatud — lähtestamine pole vajalik"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:437
+#: lib/phoenix_kit_legal/web/settings.html.heex:439
 #, elixir-autogen, elixir-format
 msgid "Not generated"
 msgstr "Pole genereeritud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:602
+#: lib/phoenix_kit_legal/web/settings.html.heex:604
 #, elixir-autogen, elixir-format
 msgid "Notice"
 msgstr "Teade"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:634
+#: lib/phoenix_kit_legal/web/settings.html.heex:636
 #, elixir-autogen, elixir-format
 msgid "Opt-in framework selected (GDPR, UK GDPR, LGPD, or PIPEDA)"
 msgstr "Valitud on opt-in raamistik (GDPR, UK GDPR, LGPD või PIPEDA)"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:389
+#: lib/phoenix_kit_legal/web/settings.html.heex:391
 #, elixir-autogen, elixir-format
 msgid "Page"
 msgstr "Leht"
 
-#: lib/phoenix_kit_legal/web/settings.ex:171
+#: lib/phoenix_kit_legal/web/settings.ex:176
 #, elixir-autogen, elixir-format
 msgid "Page generated successfully"
 msgstr "Leht edukalt genereeritud"
 
-#: lib/phoenix_kit_legal/web/settings.ex:192
+#: lib/phoenix_kit_legal/web/settings.ex:197
 #, elixir-autogen, elixir-format
 msgid "Page published successfully"
 msgstr "Leht edukalt avaldatud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:703
+#: lib/phoenix_kit_legal/web/settings.html.heex:697
 #, elixir-autogen, elixir-format
 msgid "Policy Version"
 msgstr "Poliitika versioon"
 
-#: lib/phoenix_kit_legal/legal.ex:643
+#: lib/phoenix_kit_legal/legal.ex:674
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:62
 #, elixir-autogen, elixir-format
 msgid "Preferences"
 msgstr "Eelistused"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:742
+#: lib/phoenix_kit_legal/web/settings.html.heex:728
 #, elixir-autogen, elixir-format
 msgid "Preview"
 msgstr "Eelvaade"
 
-#: lib/phoenix_kit_legal/legal.ex:624
-#: lib/phoenix_kit_legal/legal.ex:1020
+#: lib/phoenix_kit_legal/legal.ex:655
+#: lib/phoenix_kit_legal/legal.ex:1158
 #, elixir-autogen, elixir-format
 msgid "Privacy Policy"
 msgstr "Privaatsuspoliitika"
 
-#: lib/phoenix_kit_legal/legal.ex:618
+#: lib/phoenix_kit_legal/legal.ex:649
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:341
 #, elixir-autogen, elixir-format
 msgid "Privacy Preferences"
 msgstr "Privaatsuseelistused"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:455
+#: lib/phoenix_kit_legal/web/settings.html.heex:457
 #, elixir-autogen, elixir-format
 msgid "Publish"
 msgstr "Avalda"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:36
+#: lib/phoenix_kit_legal/web/settings.html.heex:38
 #, elixir-autogen, elixir-format
 msgid "Publishing module is required for Legal pages. Please enable Publishing first."
 msgstr "Õigusdokumentide lehtede jaoks on vaja avaldamise moodulit. Palun luba see esmalt."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:132
+#: lib/phoenix_kit_legal/web/settings.html.heex:134
 #, elixir-autogen, elixir-format
 msgid "Reg. No:"
 msgstr "Reg. nr:"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:467
+#: lib/phoenix_kit_legal/web/settings.html.heex:469
 #, elixir-autogen, elixir-format
 msgid "Regenerate"
 msgstr "Genereeri uuesti"
 
-#: lib/phoenix_kit_legal/legal.ex:616
+#: lib/phoenix_kit_legal/legal.ex:647
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:299
-#: lib/phoenix_kit_legal/web/settings.html.heex:824
+#: lib/phoenix_kit_legal/web/settings.html.heex:810
 #, elixir-autogen, elixir-format
 msgid "Reject"
 msgstr "Keeldu"
 
-#: lib/phoenix_kit_legal/legal.ex:621
+#: lib/phoenix_kit_legal/legal.ex:652
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:429
 #, elixir-autogen, elixir-format
 msgid "Reject All"
 msgstr "Keeldu kõigest"
 
-#: lib/phoenix_kit_legal/legal.ex:644
+#: lib/phoenix_kit_legal/legal.ex:675
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:64
 #, elixir-autogen, elixir-format
 msgid "Remember your settings like language and region preferences."
 msgstr "Jätavad meelde sinu eelistused, näiteks keele ja piirkonna."
 
-#: lib/phoenix_kit_legal/legal.ex:623
+#: lib/phoenix_kit_legal/legal.ex:654
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:385
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr "Kohustuslik"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:390
+#: lib/phoenix_kit_legal/web/settings.html.heex:392
 #, elixir-autogen, elixir-format
 msgid "Required By"
 msgstr "Nõutud raamistike poolt"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:199
+#: lib/phoenix_kit_legal/web/settings.html.heex:201
 #, elixir-autogen, elixir-format
 msgid "Required for GDPR compliance. Leave empty if not applicable."
 msgstr "Nõutav GDPR-vastavuseks. Jäta tühjaks, kui see ei ole asjakohane."
 
-#: lib/phoenix_kit_legal/legal.ex:630
+#: lib/phoenix_kit_legal/legal.ex:661
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:44
 #, elixir-autogen, elixir-format
 msgid "Required for core functionality. These cannot be disabled."
 msgstr "Saidi toimimiseks hädavajalikud. Neid ei saa välja lülitada."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:318
+#: lib/phoenix_kit_legal/web/settings.html.heex:320
 #, elixir-autogen, elixir-format
 msgid "Reset Legal Pages"
 msgstr "Lähtesta õigusdokumentide lehed"
 
-#: lib/phoenix_kit_legal/web/settings.ex:249
+#: lib/phoenix_kit_legal/web/settings.ex:257
 #, elixir-autogen, elixir-format
 msgid "Reset failed: %{reason}"
 msgstr "Lähtestamine ebaõnnestus: %{reason}"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:294
+#: lib/phoenix_kit_legal/web/settings.html.heex:296
 #, elixir-autogen, elixir-format
 msgid "Save DPO Contact"
 msgstr "Salvesta DPO kontakt"
 
-#: lib/phoenix_kit_legal/legal.ex:622
+#: lib/phoenix_kit_legal/legal.ex:653
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:436
 #, elixir-autogen, elixir-format
 msgid "Save Preferences"
 msgstr "Salvesta eelistused"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:736
+#: lib/phoenix_kit_legal/web/settings.html.heex:722
 #, elixir-autogen, elixir-format
 msgid "Save Settings"
 msgstr "Salvesta seaded"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:641
+#: lib/phoenix_kit_legal/web/settings.html.heex:643
 #, elixir-autogen, elixir-format
 msgid "Select an opt-in framework to enable the floating icon"
 msgstr "Vali opt-in raamistik, et hõljuv ikoon lubada"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:381
+#: lib/phoenix_kit_legal/web/settings.html.heex:383
 #, elixir-autogen, elixir-format
 msgid "Select compliance frameworks above to see required pages."
 msgstr "Vali ülal vastavusraamistikud, et näha nõutud lehti."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:55
+#: lib/phoenix_kit_legal/web/settings.html.heex:57
 #, elixir-autogen, elixir-format
 msgid "Select the privacy regulations your application must comply with."
 msgstr "Vali privaatsusregulatsioonid, millele sinu rakendus peab vastama."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:524
+#: lib/phoenix_kit_legal/web/settings.html.heex:526
 #, elixir-autogen, elixir-format
 msgid "Show cookie consent banner to visitors"
 msgstr "Näita külastajatele küpsiste nõusolekuriba"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:604
+#: lib/phoenix_kit_legal/web/settings.html.heex:606
 #, elixir-autogen, elixir-format
 msgid "Simple notice: banner shown once, no blocking, no floating icon"
 msgstr "Lihtne teade: riba kuvatakse korra, ilma blokeerimise ja hõljuva ikoonita"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:185
+#: lib/phoenix_kit_legal/web/settings.html.heex:187
 #, elixir-autogen, elixir-format
 msgid "Site URL not configured"
 msgstr "Saidi URL ei ole seadistatud"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:391
+#: lib/phoenix_kit_legal/web/settings.html.heex:393
 #, elixir-autogen, elixir-format
 msgid "Status"
 msgstr "Olek"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:584
+#: lib/phoenix_kit_legal/web/settings.html.heex:586
 #, elixir-autogen, elixir-format
 msgid "Strict"
 msgstr "Range"
 
-#: lib/phoenix_kit_legal/legal.ex:1022
+#: lib/phoenix_kit_legal/legal.ex:1160
 #, elixir-autogen, elixir-format
 msgid "Terms of Service"
 msgstr "Kasutustingimused"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:554
+#: lib/phoenix_kit_legal/web/settings.html.heex:556
 #, elixir-autogen, elixir-format
 msgid "The following pages need to be published for the consent widget to work properly:"
 msgstr "Nõusolekuvidina korralikuks toimimiseks peavad järgmised lehed olema avaldatud:"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:109
+#: lib/phoenix_kit_legal/web/settings.html.heex:111
 #, elixir-autogen, elixir-format
 msgid "This information will appear in your legal documents."
 msgstr "See teave kuvatakse sinu õigusdokumentides."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:315
+#: lib/phoenix_kit_legal/web/settings.html.heex:317
 #, elixir-autogen, elixir-format
 msgid "This will delete all legal pages and their group. You will need to regenerate them. Continue?"
 msgstr "See kustutab kõik õigusdokumentide lehed ja nende grupi. Need tuleb uuesti genereerida. Kas jätkata?"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:654
+#: lib/phoenix_kit_legal/web/settings.html.heex:656
 #, elixir-autogen, elixir-format
 msgid "Top Left"
 msgstr "Üleval vasakul"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:655
+#: lib/phoenix_kit_legal/web/settings.html.heex:657
 #, elixir-autogen, elixir-format
 msgid "Top Right"
 msgstr "Üleval paremal"
 
-#: lib/phoenix_kit_legal/legal.ex:640
+#: lib/phoenix_kit_legal/legal.ex:671
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:58
 #, elixir-autogen, elixir-format
 msgid "Used for personalized advertising and measuring ad effectiveness."
 msgstr "Kasutatakse personaliseeritud reklaamide ja nende tõhususe mõõtmiseks."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:164
+#: lib/phoenix_kit_legal/web/settings.html.heex:166
 #, elixir-autogen, elixir-format
 msgid "VAT:"
 msgstr "KMKR:"
 
-#: lib/phoenix_kit_legal/legal.ex:613
+#: lib/phoenix_kit_legal/legal.ex:644
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:271
 #, elixir-autogen, elixir-format
 msgid "We use cookies to enhance your browsing experience and analyze our traffic."
 msgstr "Kasutame küpsiseid, et parandada sinu sirvimiskogemust ja analüüsida liiklust."
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:812
+#: lib/phoenix_kit_legal/web/settings.html.heex:798
 #, elixir-autogen, elixir-format
 msgid "We use cookies to enhance your experience."
 msgstr "Kasutame küpsiseid, et parandada sinu kogemust."
 
-#: lib/phoenix_kit_legal/legal.ex:611
+#: lib/phoenix_kit_legal/legal.ex:642
 #: lib/phoenix_kit_legal/web/cookie_consent.ex:268
-#: lib/phoenix_kit_legal/web/settings.html.heex:809
+#: lib/phoenix_kit_legal/web/settings.html.heex:795
 #, elixir-autogen, elixir-format
 msgid "We value your privacy"
 msgstr "Hindame sinu privaatsust"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:765
+#: lib/phoenix_kit_legal/web/settings.html.heex:751
 #, elixir-autogen, elixir-format
 msgid "Your website content"
 msgstr "Sinu veebisaidi sisu"
 
-#: lib/phoenix_kit_legal/web/settings.html.heex:746
+#: lib/phoenix_kit_legal/web/settings.html.heex:732
 #, elixir-autogen, elixir-format
 msgid "your-website.com"
 msgstr "your-website.com"
+
+#: lib/phoenix_kit_legal/web/settings.ex:45
+#, elixir-autogen, elixir-format
+msgid "Settings"
+msgstr "Seaded"
