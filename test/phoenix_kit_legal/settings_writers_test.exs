@@ -81,6 +81,44 @@ defmodule PhoenixKit.Modules.Legal.SettingsWritersTest do
     end
   end
 
+  describe "remembering what the cookie policy was generated from" do
+    alias PhoenixKit.Users.Auth.Scope
+
+    test "names whoever generated the page" do
+      scope = %Scope{authenticated?: true, user: %{uuid: @actor}}
+
+      assert Legal.remember_collection("cookie-policy", scope) == :ok
+
+      assert [
+               %{
+                 kind: :string,
+                 key: "legal_policy_collection_fingerprint",
+                 module: "legal",
+                 opts: [actor_uuid: @actor]
+               }
+             ] = SettingsRecorder.written()
+    end
+
+    test "names nobody when there is no scope, or no user in it" do
+      for scope <- [nil, %Scope{authenticated?: false, user: nil}] do
+        assert Legal.remember_collection("cookie-policy", scope) == :ok
+
+        assert [%{key: "legal_policy_collection_fingerprint", opts: []}] =
+                 SettingsRecorder.written()
+      end
+    end
+
+    test "only the cookie policy is written from the list" do
+      scope = %Scope{authenticated?: true, user: %{uuid: @actor}}
+
+      for page <- ["privacy-policy", "terms-of-service", "do-not-sell"] do
+        assert Legal.remember_collection(page, scope) == :ok
+      end
+
+      assert SettingsRecorder.written() == []
+    end
+  end
+
   describe "the settings page" do
     setup do
       for {key, value} <- [

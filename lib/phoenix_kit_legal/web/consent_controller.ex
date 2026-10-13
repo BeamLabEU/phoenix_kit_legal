@@ -28,6 +28,8 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
 
   use PhoenixKitWeb, :controller
 
+  require Logger
+
   alias PhoenixKit.Modules.Legal
   alias PhoenixKit.Modules.Legal.Consent
   alias PhoenixKit.Settings
@@ -118,10 +120,49 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   # `Sec-Fetch-Site` decides, as it does when there is no `Origin` at all.
   defp same_site?(conn) do
     case origin(conn) do
-      {scheme, authority} -> authority in own_authorities(conn, scheme)
-      nil -> fetch_site_allows?(conn)
+      {scheme, authority} ->
+        own = own_authorities(conn, scheme)
+        authority in own or note_refused(authority, own)
+
+      nil ->
+        fetch_site_allows?(conn)
     end
   end
+
+  # A refusal is silent to the visitor — the banner just does not record —
+  # and the usual cause is not an attack but a proxy that rewrites `Host`
+  # without forwarding the original. So each refused origin is logged, once
+  # per node, with what it was compared against: the two lines an operator
+  # needs to see which name is missing. Nothing of the visitor is in it.
+  #
+  # The origins already logged are remembered in a `:persistent_term`, and
+  # only the first fifty of them: a stranger can send any `Origin` they like,
+  # and neither the log nor the memory may grow with what they send. The
+  # read on every later refusal is free; the write happens at most that many
+  # times in the node's life.
+  @refused_key {__MODULE__, :refused_origins}
+  @refused_limit 50
+  @refused_host_bytes 255
+
+  defp note_refused({host, _port} = authority, own) do
+    seen = :persistent_term.get(@refused_key, MapSet.new())
+
+    if MapSet.size(seen) < @refused_limit and not MapSet.member?(seen, authority) and
+         byte_size(host) <= @refused_host_bytes do
+      :persistent_term.put(@refused_key, MapSet.put(seen, authority))
+
+      Logger.info(fn ->
+        "[Legal] consent write refused as cross-site: Origin #{format_authority(authority)} " <>
+          "is none of #{Enum.map_join(own, ", ", &format_authority/1)} " <>
+          "(the Host header, x-forwarded-host, site_url). If that origin is this site, " <>
+          "have the proxy forward the host or set site_url. Logged once per origin."
+      end)
+    end
+
+    false
+  end
+
+  defp format_authority({host, port}), do: inspect("#{host}:#{port}")
 
   defp fetch_site_allows?(conn) do
     case get_req_header(conn, "sec-fetch-site") do

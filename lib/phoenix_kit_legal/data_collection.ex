@@ -178,10 +178,22 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
     Map.new(@categories, &{&1, Map.get(grouped, &1, [])})
   end
 
-  @doc "The keys the operator took out of the banner and the policy."
-  @spec hidden_keys() :: [String.t()]
-  def hidden_keys do
-    case Settings.get_json_setting_cached(@hidden_key, %{"items" => []}) do
+  @doc """
+  The keys the operator took out of the banner and the policy.
+
+  Read through the settings cache — this runs on every page that renders the
+  banner. The cache trails a write by a moment, so anything that has just
+  written the list, or is about to change it, asks for `fresh: true`, which
+  reads the setting itself.
+  """
+  @spec hidden_keys(keyword()) :: [String.t()]
+  def hidden_keys(opts \\ []) do
+    stored =
+      if Keyword.get(opts, :fresh, false),
+        do: Legal.fresh_json_setting(@hidden_key, %{"items" => []}),
+        else: Settings.get_json_setting_cached(@hidden_key, %{"items" => []})
+
+    case stored do
       %{"items" => items} when is_list(items) -> Enum.filter(items, &is_binary/1)
       _ -> []
     end
@@ -193,20 +205,32 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
     :exit, _ -> []
   end
 
-  @doc "Takes an entry out of the banner and the policy."
-  @spec hide(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  @doc """
+  Takes an entry out of the banner and the policy. Answers `{:ok, keys}` with
+  the hidden keys as they now are.
+  """
+  @spec hide(String.t(), keyword()) :: {:ok, [String.t()]} | {:error, term()}
   def hide(key, opts \\ []) when is_binary(key),
-    do: put_hidden(Enum.uniq([key | hidden_keys()]), opts)
+    do: put_hidden(Enum.uniq([key | hidden_keys(fresh: true)]), opts)
 
-  @doc "Puts an entry back."
-  @spec show(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  @doc "Puts an entry back. Answers `{:ok, keys}` with the hidden keys as they now are."
+  @spec show(String.t(), keyword()) :: {:ok, [String.t()]} | {:error, term()}
   def show(key, opts \\ []) when is_binary(key),
-    do: put_hidden(List.delete(hidden_keys(), key), opts)
+    do: put_hidden(List.delete(hidden_keys(fresh: true), key), opts)
 
   # `opts` say who made the change (`:actor_uuid`, `:source`) in the
   # settings history.
+  #
+  # The list is read fresh before it is changed and handed back after: the
+  # settings cache trails a write, and a caller that re-read it would see the
+  # list as it was, and undo nothing on the next click.
   defp put_hidden(keys, opts) do
-    Legal.put_setting(:json, @hidden_key, %{"items" => Enum.sort(keys)}, opts)
+    keys = Enum.sort(keys)
+
+    case Legal.put_setting(:json, @hidden_key, %{"items" => keys}, opts) do
+      {:ok, _setting} -> {:ok, keys}
+      error -> error
+    end
   end
 
   @doc """

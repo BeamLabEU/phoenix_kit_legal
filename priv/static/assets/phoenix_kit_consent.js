@@ -255,53 +255,129 @@
     return true;
   }
 
-  // Asks the server what it holds for this browser and hands it this
-  // browser's decision when it holds none, or another one — a decision made
-  // before the server kept any, a report that never arrived (a withdrawal
-  // whose POST failed would otherwise leave the old cookie answering
-  // "granted" for months), or a cookie the server can no longer read.
+  // What the server holds for this browser: resolves to
+  // `{ status: <HTTP status>, body: <the JSON, when the status is 200> }`,
+  // rejects when the server could not be reached.
+  function fetchServerConsent() {
+    return fetch(PhoenixKitConsent.config.consentEndpoint, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { "accept": "application/json" }
+    }).then(function(response) {
+      if (!response.ok) return { status: response.status, body: null };
+      return response.json().then(function(body) {
+        return { status: response.status, body: body };
+      });
+    });
+  }
+
+  // When a local decision was made, in the server's unit (unix seconds);
+  // 0 when it does not say.
+  function decidedAt(consent) {
+    var at = consent && consent.timestamp ? Date.parse(consent.timestamp) : NaN;
+    return isNaN(at) ? 0 : Math.floor(at / 1000);
+  }
+
+  // The server's decision in the shape this script keeps its own.
+  function fromServer(server) {
+    var categories = server.consent || {};
+    return {
+      necessary: true,
+      analytics: !!categories.analytics,
+      marketing: !!categories.marketing,
+      preferences: !!categories.preferences,
+      timestamp: new Date(server.decided_at * 1000).toISOString()
+    };
+  }
+
+  // Takes the server's decision as this browser's: it was made after the
+  // one kept here — on another port or scheme of this host, which shares the
+  // cookie but not localStorage, or by the site through the endpoint.
+  function adoptServerConsent(server) {
+    var before = PhoenixKitConsent.consent;
+    var consent = fromServer(server);
+
+    PhoenixKitConsent.consent = consent;
+    saveConsent(consent);
+    applyConsent(consent);
+    updateUI();
+    log("Adopted the server's newer decision", consent);
+
+    // As when the visitor takes a consent back here: what already ran on
+    // this page ran under the old choice.
+    if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, consent)) {
+      window.location.reload();
+    }
+  }
+
+  // Asks the server what it holds for this browser and settles any
+  // difference — the newer copy wins, in either direction.
+  //
+  //   * The server holds nothing, or a decision for another policy version:
+  //     it is handed this browser's (made before the server kept any, or a
+  //     report — a re-consent to a new policy, say — that never arrived).
+  //   * The same version, other choices: whichever was made later stands.
+  //     A withdrawal whose report failed is sent again, where it would
+  //     otherwise leave the old cookie answering "granted" for months; a
+  //     decision the server took later is adopted here instead of being
+  //     overwritten with the stale local one.
   //
   // The server is asked, rather than the cookie looked at, because a cookie
   // can be there and mean nothing to the server: signed with a key since
   // rotated, or set by another application on the same host.
   //
-  // Once per session. A browser that refuses the cookie would otherwise
-  // report on every page, and the server, seeing no cookie, would log each
-  // report as a new visitor's decision.
+  // Once per session — unless it could not be done (the server did not
+  // answer, or did not take the report), in which case the next page tries
+  // again. A browser that refuses the cookie would otherwise report on
+  // every page, and the server, seeing no cookie, would log each report as
+  // a new visitor's decision.
   function reconcileWithServer(consent) {
     var endpoint = PhoenixKitConsent.config.consentEndpoint;
     if (!endpoint || typeof fetch !== "function") return;
     if (reconciledAlready()) return;
     setReconciled(true);
 
-    fetch(endpoint, {
-      method: "GET",
-      credentials: "same-origin",
-      headers: { "accept": "application/json" }
-    }).then(function(response) {
-      if (!response.ok) throw new Error("Consent endpoint returned " + response.status);
-      return response.json();
-    }).then(function(server) {
-      if (!server.decided || !sameCategories(server.consent, consent)) {
-        reportConsent(consent, "sync");
+    function handOver() {
+      return reportConsent(consent, "sync").then(function(recorded) {
+        if (!recorded) setReconciled(false);
+      });
+    }
+
+    fetchServerConsent().then(function(answer) {
+      if (answer.status !== 200) throw new Error("Consent endpoint returned " + answer.status);
+      var server = answer.body || {};
+
+      if (!server.decided || server.version !== PhoenixKitConsent.config.policyVersion) {
+        return handOver();
       }
+      if (sameCategories(server.consent, consent)) return;
+      if (server.decided_at > decidedAt(consent)) return adoptServerConsent(server);
+      return handOver();
     }).catch(function(err) {
+      setReconciled(false);
       log("Could not compare consent with the server", err);
     });
   }
 
-  function revokePending() {
+  // When the revocation still waiting to be delivered was made (unix
+  // milliseconds), or null when none is waiting.
+  function revokePendingSince() {
     try {
-      return localStorage.getItem(REVOKE_PENDING_KEY) === "1";
+      var value = localStorage.getItem(REVOKE_PENDING_KEY);
+      if (value === null) return null;
+      var at = parseInt(value, 10);
+      // A flag with no usable time in it is taken as made just now, so that
+      // it is delivered rather than dropped.
+      return isNaN(at) || at < 1000000000000 ? Date.now() : at;
     } catch (e) {
-      return false;
+      return null;
     }
   }
 
   function setRevokePending(pending) {
     try {
       if (pending) {
-        localStorage.setItem(REVOKE_PENDING_KEY, "1");
+        localStorage.setItem(REVOKE_PENDING_KEY, String(Date.now()));
       } else {
         localStorage.removeItem(REVOKE_PENDING_KEY);
       }
@@ -311,13 +387,47 @@
   }
 
   // The DELETE that takes the server's copy back. The flag is set before it
+  // — with the time, so a later page can tell what the revocation covers —
   // and cleared only when the server answers, so a request that never
   // arrived (offline, a closed tab) is sent again on the next page.
   function revokeOnServer() {
     setRevokePending(true);
+    return deliverRevoke();
+  }
+
+  function deliverRevoke() {
     return forgetServerConsent().then(function(forgotten) {
       if (forgotten) setRevokePending(false);
       return forgotten;
+    });
+  }
+
+  // A revocation left over from an earlier page. It takes back what the
+  // server held when it was made, and nothing since: a decision the server
+  // recorded later (in another tab, on another port of this host) is not
+  // this revocation's to delete, so the server is asked first.
+  function retryRevoke(since) {
+    var endpoint = PhoenixKitConsent.config.consentEndpoint;
+    if (!endpoint || typeof fetch !== "function") {
+      // Nowhere to deliver it, now or later.
+      setRevokePending(false);
+      return;
+    }
+
+    fetchServerConsent().then(function(answer) {
+      // 404: the banner is switched off, and the endpoint with it.
+      if (answer.status === 404) return setRevokePending(false);
+      if (answer.status !== 200) return;
+
+      var server = answer.body || {};
+      if (!server.decided || server.decided_at * 1000 > since) {
+        // Nothing left to take back, or nothing of this revocation's.
+        setRevokePending(false);
+      } else {
+        deliverRevoke();
+      }
+    }).catch(function(err) {
+      log("Could not deliver the pending revocation", err);
     });
   }
 
@@ -367,9 +477,12 @@
     });
   }
 
+  // Resolves to whether the server's copy is gone. With no endpoint there is
+  // no copy, and a 404 means the banner — and the endpoint with it — is
+  // switched off: both are "done", not something to retry on every page.
   function forgetServerConsent() {
     var endpoint = PhoenixKitConsent.config.consentEndpoint;
-    if (!endpoint || typeof fetch !== "function") return Promise.resolve(false);
+    if (!endpoint || typeof fetch !== "function") return Promise.resolve(true);
 
     return fetch(endpoint, {
       method: "DELETE",
@@ -377,7 +490,7 @@
       keepalive: true,
       headers: { "accept": "application/json" }
     }).then(function(response) {
-      return response.ok;
+      return response.ok || response.status === 404;
     }).catch(function(err) {
       log("Could not forget consent", err);
       return false;
@@ -392,12 +505,13 @@
   function restoreConsent() {
     var stored = loadConsent();
 
-    if (revokePending()) {
+    var revokedAt = revokePendingSince();
+    if (revokedAt !== null) {
       if (stored) {
         // A decision made after the revocation replaces it.
         setRevokePending(false);
       } else {
-        revokeOnServer();
+        retryRevoke(revokedAt);
       }
     }
 
@@ -453,16 +567,21 @@
 
   function setupCrossTabSync() {
     window.addEventListener("storage", function(e) {
-      if (e.key !== STORAGE_KEY) return;
-
-      // Removed in another tab: the visitor took their consent back there,
-      // and this tab must stop answering with the old one.
-      if (e.newValue === null) {
+      // Removed in another tab — the key itself, or all of storage
+      // (`e.key` is null then): the visitor took their consent back there,
+      // and this tab must stop acting on the old one. Applying a refusal of
+      // everything is what tells Google's consent mode and the page's own
+      // listeners (`phx:consent-updated`); forgetting it in memory alone
+      // would leave them on the old answer.
+      if (e.key === null || (e.key === STORAGE_KEY && e.newValue === null)) {
         PhoenixKitConsent.consent = null;
+        applyConsent({ necessary: true, analytics: false, marketing: false, preferences: false });
         updateUI();
         log("Cross-tab sync: consent revoked");
         return;
       }
+
+      if (e.key !== STORAGE_KEY) return;
 
       try {
         var newConsent = JSON.parse(e.newValue);

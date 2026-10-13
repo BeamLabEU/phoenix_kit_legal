@@ -303,11 +303,11 @@ defmodule PhoenixKit.Modules.Legal.DataCollectionTest do
 
     test "write the sorted list of hidden keys, with who made the change" do
       opts = [actor_uuid: "018e3c4a-1234-7678-abcd-ef1234567890", source: "settings"]
-      PhoenixKit.Cache.put(:settings, "legal_hidden_collection", %{"items" => ["shop.cart"]})
+      SettingsRecorder.seed("legal_hidden_collection", %{"items" => ["shop.cart"]})
 
-      assert {:ok, _} = DataCollection.hide("a.first", opts)
-      assert {:ok, _} = DataCollection.show("shop.cart", opts)
-      assert {:ok, _} = DataCollection.hide("shop.cart")
+      assert DataCollection.hide("a.first", opts) == {:ok, ["a.first", "shop.cart"]}
+      assert DataCollection.show("shop.cart", opts) == {:ok, ["a.first"]}
+      assert DataCollection.hide("shop.cart") == {:ok, ["a.first", "shop.cart"]}
 
       assert [
                %{
@@ -317,9 +317,27 @@ defmodule PhoenixKit.Modules.Legal.DataCollectionTest do
                  module: "legal",
                  opts: ^opts
                },
-               %{value: %{"items" => []}, opts: ^opts},
-               %{value: %{"items" => ["shop.cart"]}, opts: []}
+               %{value: %{"items" => ["a.first"]}, opts: ^opts},
+               %{value: %{"items" => ["a.first", "shop.cart"]}, opts: []}
              ] = SettingsRecorder.written()
+    end
+
+    # The settings cache trails a write. A toggle that read the list through
+    # it would start from the list as it was, and the second click of a pair
+    # would repeat the first instead of undoing it.
+    test "start from the stored list, not from a cache that has not caught up" do
+      PhoenixKit.Cache.put(:settings, "legal_hidden_collection", %{"items" => []})
+      SettingsRecorder.seed("legal_hidden_collection", %{"items" => ["shop.cart"]})
+
+      assert DataCollection.show("shop.cart") == {:ok, []}
+      assert DataCollection.hidden_keys(fresh: true) == []
+      # The cached read is still the old one; nothing here depends on it.
+      assert DataCollection.hidden_keys() == []
+    end
+
+    test "hiding twice hides once" do
+      assert DataCollection.hide("shop.cart") == {:ok, ["shop.cart"]}
+      assert DataCollection.hide("shop.cart") == {:ok, ["shop.cart"]}
     end
   end
 
@@ -626,7 +644,17 @@ defmodule PhoenixKit.Modules.Legal.JsSourcesTest do
     # On load the server is asked what it holds, and told when that differs…
     assert source =~ "function reconcileWithServer(consent)"
     assert source =~ "reconcileWithServer(stored);"
-    assert source =~ "if (!server.decided || !sameCategories(server.consent, consent)) {"
+
+    assert source =~
+             "if (!server.decided || server.version !== PhoenixKitConsent.config.policyVersion) {"
+
+    # …the newer copy winning, in either direction…
+    assert source =~
+             "if (server.decided_at > decidedAt(consent)) return adoptServerConsent(server);"
+
+    # …and tried again on the next page when it could not be done.
+    assert source =~ "if (!recorded) setReconciled(false);"
+    assert source =~ "}).catch(function(err) {\n      setReconciled(false);"
     # …once per session, not on every page…
     assert source =~ "if (reconciledAlready()) return;\n    setReconciled(true);"
     assert source =~ ~s(const SYNCED_KEY = "pk_consent_synced";)
@@ -637,8 +665,16 @@ defmodule PhoenixKit.Modules.Legal.JsSourcesTest do
     assert source =~ ~s(const REVOKE_PENDING_KEY = "pk_consent_revoke_pending";)
     assert source =~ "if (forgotten) setRevokePending(false);"
     assert source =~ "revokeOnServer().then("
-    # …and a revocation in another tab empties this one.
-    assert source =~ "if (e.newValue === null) {\n        PhoenixKitConsent.consent = null;"
+    # …carries its time, and never deletes a decision the server took later…
+    assert source =~ "localStorage.setItem(REVOKE_PENDING_KEY, String(Date.now()));"
+    assert source =~ "if (!server.decided || server.decided_at * 1000 > since) {"
+    # …and stops once the endpoint is gone.
+    assert source =~ "return response.ok || response.status === 404;"
+
+    # A revocation in another tab — or cleared storage — is applied here as
+    # a refusal of everything.
+    assert source =~
+             "if (e.key === null || (e.key === STORAGE_KEY && e.newValue === null)) {"
   end
 
   test "the route module carries the consent endpoint and nothing else" do

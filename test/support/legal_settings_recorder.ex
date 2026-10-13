@@ -41,8 +41,18 @@ defmodule PhoenixKit.Modules.Legal.Test.SettingsRecorder do
   def update_json_setting_with_module(key, value, module, opts),
     do: record(:json, key, value, module, opts)
 
+  @doc """
+  What a fresh read of a JSON setting answers in this process: the last value
+  written here, else what `seed/2` put there, else the default.
+  """
+  def get_json_setting(key, default), do: Process.get({__MODULE__, key}, default)
+
+  @doc "Gives a JSON setting a stored value, as if it had been written before the test."
+  def seed(key, value), do: Process.put({__MODULE__, key}, value)
+
   defp record(kind, key, value, module, opts) do
     write = %{kind: kind, key: key, value: value, module: module, opts: opts}
+    if kind == :json, do: Process.put({__MODULE__, key}, value)
     send(self(), {:setting_written, write})
     {:ok, write}
   end

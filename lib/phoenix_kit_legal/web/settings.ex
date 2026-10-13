@@ -327,7 +327,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
        |> assign(:icon_position, params["icon_position"] || "bottom-right")
        |> assign(:google_consent_mode, params["google_consent_mode"] == "true")
        |> assign(:show_consent_icon, show_icon)
-       |> assign_consent_record()
+       |> assign_consent_record(consent_record_params(params))
        |> assign_collection()
        |> put_flash(:info, gettext("Consent widget settings saved"))}
     else
@@ -358,8 +358,8 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
         else: DataCollection.hide(key, actor_opts(socket))
 
     case result do
-      {:ok, _} ->
-        {:noreply, assign_collection(socket)}
+      {:ok, hidden} ->
+        {:noreply, assign_collection(socket, hidden)}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
@@ -377,9 +377,23 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     })
   end
 
-  defp assign_collection(socket) do
-    hidden = DataCollection.hidden_keys()
-    widget? = Legal.consent_widget_enabled?()
+  # After a save: what was just saved, rather than a read through a cache
+  # that has not caught up with the write yet.
+  defp assign_consent_record(socket, saved) do
+    assign(socket, :consent_record, %{
+      log: saved.log,
+      log_ip: saved.log_ip,
+      log_user_agent: saved.log_user_agent,
+      reload_on_withdrawal: saved.reload_on_withdrawal,
+      cookie_days: saved.cookie_days |> to_string() |> String.trim() |> String.to_integer(),
+      max_days: Consent.day_bounds().max
+    })
+  end
+
+  # `hidden` is passed by whoever has just changed it; otherwise it is read
+  # from the setting itself, not through the cache, which trails a write.
+  defp assign_collection(socket, hidden \\ DataCollection.hidden_keys(fresh: true)) do
+    widget? = socket.assigns[:consent_widget_enabled] == true
 
     entries =
       Enum.map(DataCollection.declared(), fn entry ->

@@ -264,6 +264,103 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
     end
   end
 
+  describe "a refused origin" do
+    @refused_key {ConsentController, :refused_origins}
+
+    setup do
+      # The suite logs from :warning up; this is logged at :info.
+      previous = Logger.level()
+      Logger.configure(level: :info)
+      :persistent_term.erase(@refused_key)
+
+      on_exit(fn ->
+        Logger.configure(level: previous)
+        :persistent_term.erase(@refused_key)
+      end)
+    end
+
+    defp refuse(origin, headers \\ []) do
+      ExUnit.CaptureLog.with_log([level: :info], fn ->
+        conn =
+          call(
+            :post,
+            :record,
+            @decision,
+            [{"origin", origin}, {"user-agent", "Mozilla/5.0 Visitor"} | headers],
+            %{remote_ip: {203, 0, 113, 99}}
+          )
+
+        assert conn.status == 403
+      end)
+      |> elem(1)
+    end
+
+    test "is logged with what it was compared against, and nothing of the visitor" do
+      PhoenixKit.Cache.put(:settings, "site_url", "https://shop.example")
+
+      log =
+        refuse("https://www.shop.example", [
+          {"host", "10.0.0.5:4000"},
+          {"x-forwarded-host", "edge.example"},
+          {"cookie", "pk_consent=secret-cookie"}
+        ])
+
+      assert log =~ "[info]"
+      assert log =~ "consent write refused as cross-site"
+      assert log =~ ~s(Origin "www.shop.example:443")
+      # The three names this site answers to, as the request gave them.
+      assert log =~ ~s("10.0.0.5:4000")
+      assert log =~ ~s("shop.example:443")
+      assert log =~ ~s("edge.example:443")
+
+      for held <- ["203.0.113.99", "Mozilla", "secret-cookie", "analytics"],
+          do: refute(log =~ held)
+    end
+
+    test "is logged once, however often it comes back" do
+      assert refuse("https://evil.example") =~ ~s(Origin "evil.example:443")
+      assert refuse("https://evil.example") == ""
+      # The same authority spelled another way.
+      assert refuse("https://EVIL.example:443") == ""
+      # Another port is another origin.
+      assert refuse("https://evil.example:8443") =~ ~s("evil.example:8443")
+    end
+
+    test "an accepted write, and one refused by Sec-Fetch-Site alone, log nothing" do
+      {_, log} =
+        ExUnit.CaptureLog.with_log([level: :info], fn ->
+          assert call(:post, :record, @decision, [{"origin", "http://www.example.com"}]).status ==
+                   200
+
+          assert call(:post, :record, @decision, [{"sec-fetch-site", "cross-site"}]).status == 403
+        end)
+
+      refute log =~ "refused"
+      assert :persistent_term.get(@refused_key, MapSet.new()) == MapSet.new()
+    end
+
+    test "only the first fifty origins are remembered or logged" do
+      logs = for n <- 1..60, do: refuse("https://attacker-#{n}.example")
+
+      assert Enum.count(logs, &(&1 != "")) == 50
+      assert MapSet.size(:persistent_term.get(@refused_key)) == 50
+      assert Enum.at(logs, 49) =~ "attacker-50.example"
+      assert Enum.at(logs, 50) == ""
+
+      # One already remembered stays quiet; a new one no longer gets in.
+      assert refuse("https://attacker-1.example") == ""
+      assert refuse("https://one-more.example") == ""
+      assert MapSet.size(:persistent_term.get(@refused_key)) == 50
+    end
+
+    test "a host too long to be a host name is refused without being remembered" do
+      long = String.duplicate("a", 300) <> ".example"
+
+      assert refuse("https://" <> long) == ""
+      assert :persistent_term.get(@refused_key, MapSet.new()) == MapSet.new()
+    end
+  end
+
   describe "without the endpoint's secret" do
     test "a decision cannot be signed: 503, and no cookie" do
       conn = call(:post, :record, @decision, [], %{secret_key_base: nil})

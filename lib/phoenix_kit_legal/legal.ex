@@ -614,6 +614,13 @@ defmodule PhoenixKit.Modules.Legal do
     end
   end
 
+  # A JSON setting read from the setting itself rather than through the
+  # cache, which trails a write — for code about to change what it reads.
+  @doc false
+  @spec fresh_json_setting(String.t(), term()) :: term()
+  def fresh_json_setting(key, default) when is_binary(key),
+    do: settings_writer().get_json_setting(key, default)
+
   # `PhoenixKit.Settings`, always, outside this package's own tests: they
   # have no database behind the settings, and name a module that records
   # what would have been written.
@@ -1095,7 +1102,7 @@ defmodule PhoenixKit.Modules.Legal do
          {:ok, page_config} <- get_page_config(page_type),
          {:ok, content} <- render_template(page_config.template, language),
          {:ok, post} <- create_or_update_legal_post(page_config, content, language, scope) do
-      remember_collection(page_type)
+      remember_collection(page_type, scope)
       {:ok, post}
     end
   end
@@ -1400,14 +1407,25 @@ defmodule PhoenixKit.Modules.Legal do
   # The cookie policy is written from what the modules declare; remembering
   # that list is what lets the settings page say when the policy has fallen
   # behind it. A failed write only loses that hint.
-  defp remember_collection("cookie-policy") do
-    DataCollection.remember_generated()
+  #
+  # It is a settings write like any other, so it carries who generated the
+  # page; without a scope (a script, a task) nobody is named.
+  @doc false
+  @spec remember_collection(String.t(), map() | nil) :: :ok
+  def remember_collection("cookie-policy", scope) do
+    opts =
+      case actor_uuid(scope) do
+        uuid when is_binary(uuid) -> [actor_uuid: uuid]
+        _ -> []
+      end
+
+    DataCollection.remember_generated(opts)
     :ok
   rescue
     _ -> :ok
   end
 
-  defp remember_collection(_page_type), do: :ok
+  def remember_collection(_page_type, _scope), do: :ok
 
   defp build_template_context(language) do
     with {:ok, data_collection} <- template_collection(language) do
