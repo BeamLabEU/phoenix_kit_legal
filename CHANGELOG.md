@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.6.0 - 2026-10-13
+
+### Added
+
+- **A server-side record of consent** (#25). `GET/POST/DELETE
+  {prefix}/api/consent` records each decision as a consent log row per
+  category and a signed, first-party `pk_consent` cookie. Same-origin only
+  (scheme, host and port), booleans for known categories only, rate-limited per
+  network, and an unchanged decision is not logged twice.
+- `Legal.Consent` (`read/1`, `status/2`, `objected?/1`): other modules ask what
+  a visitor agreed to without a database query. Never raises.
+- **What the site collects is declared, not written** (`Legal.DataCollection`).
+  Modules export `data_collection/0`; the preferences dialog, the settings page
+  and the generated Cookie Policy read the same list, and the settings page
+  says when the policy has fallen behind it.
+- Settings for the record: keep the log, keep the address, keep a User-Agent
+  hash, days before asking again, reload on withdrawal. Every settings write
+  carries the acting admin into core's settings history.
+- The banner script ships through `js_sources/0` and retires the older copy
+  bundled in core's `phoenix_kit.js`.
+
+### Changed
+
+- The Cookie Policy is generated from the declared list instead of naming
+  Google and Facebook cookies a site may not have. A list that cannot be
+  gathered fails generation rather than writing an empty policy.
+
+### Fixed
+
+- The settings page compared the Cookie Policy with the settings cache right
+  after a write and could show a stale "outdated" alert; only listed entries
+  can be hidden.
+- Origin checks compare the scheme; delayed browser requests can no longer
+  reverse a newer choice; withdrawal applies a refusal immediately (Google
+  Consent Mode included) and is honored in other tabs; expired grants do not
+  survive a hook remount; clock skew cannot discard an undelivered refusal;
+  hot-path readers are total functions; listeners are installed once.
+
 ## 0.5.1 - 2026-09-27
 
 ### Fixed

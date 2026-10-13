@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.5.1"
+  @version "0.6.0"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
