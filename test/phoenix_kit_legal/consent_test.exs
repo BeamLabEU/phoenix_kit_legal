@@ -182,6 +182,17 @@ defmodule PhoenixKit.Modules.Legal.ConsentTest do
   end
 
   describe "read/1" do
+    test "malformed connection fields cannot crash a collection caller" do
+      for conn <- [
+            %{request() | req_headers: nil},
+            %{request() | req_headers: [{"cookie", nil}]},
+            %{request() | req_cookies: %{}, cookies: nil}
+          ] do
+        assert Consent.read(conn) == :none
+        assert Consent.status(conn, "analytics") == :unknown
+      end
+    end
+
     test "is :none for anything that is not a request" do
       for other <- [nil, %{}, "conn", :conn, 42, %{cookies: %{"pk_consent" => "x"}}] do
         assert Consent.read(other) == :none
@@ -190,6 +201,12 @@ defmodule PhoenixKit.Modules.Legal.ConsentTest do
   end
 
   describe "objected?/1" do
+    test "answers false for non-requests and malformed headers" do
+      for value <- [nil, %{}, :conn, "conn", 42, %{request() | req_headers: nil}] do
+        refute Consent.objected?(value)
+      end
+    end
+
     test "is true only for Sec-GPC: 1" do
       assert Consent.objected?(request([{"sec-gpc", "1"}]))
       refute Consent.objected?(request([{"sec-gpc", "0"}]))

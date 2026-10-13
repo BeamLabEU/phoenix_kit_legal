@@ -187,7 +187,11 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
             {"http://[::1]:4000", "[::1]:4000", 200},
             {"http://[::1]:4001", "[::1]:4000", 403}
           ] do
-        conn = call(:post, :record, @decision, [{"host", host}, {"origin", origin}])
+        scheme = if String.starts_with?(origin, "https:"), do: :https, else: :http
+
+        conn =
+          call(:post, :record, @decision, [{"host", host}, {"origin", origin}], %{scheme: scheme})
+
         assert conn.status == status, "Origin #{origin}, Host #{host}"
       end
     end
@@ -199,7 +203,11 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
           :post,
           :record,
           @decision,
-          [{"host", "app.example"}, {"origin", "https://app.example"}],
+          [
+            {"host", "app.example"},
+            {"origin", "https://app.example"},
+            {"x-forwarded-proto", "https"}
+          ],
           %{port: 4000}
         )
 
@@ -233,6 +241,7 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
           call(:post, :record, @decision, [
             {"host", "10.0.0.5:4000"},
             {"origin", origin},
+            {"x-forwarded-proto", "https"},
             {"x-forwarded-host", forwarded}
           ])
 
@@ -250,6 +259,8 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
             {"https://shop.example", "https://www.shop.example", 403},
             # Another scheme is another origin.
             {"https://shop.example", "http://shop.example", 403},
+            {"https://shop.example:8443", "http://shop.example:8443", 403},
+            {"http://shop.example:8443", "https://shop.example:8443", 403},
             {"", "https://shop.example", 403},
             {"not a url", "https://shop.example", 403},
             {nil, "https://shop.example", 403}
@@ -260,6 +271,37 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
           call(:post, :record, @decision, [{"host", "10.0.0.5:4000"}, {"origin", origin}])
 
         assert conn.status == status, "site_url #{inspect(site_url)}, Origin #{origin}"
+      end
+    end
+
+    test "the same host and explicit port on a different scheme is another origin" do
+      for {scheme, host, origin, status} <- [
+            {:https, "app.example:8443", "https://app.example:8443", 200},
+            {:https, "app.example:8443", "http://app.example:8443", 403},
+            {:http, "app.example:8443", "http://app.example:8443", 200},
+            {:http, "app.example:8443", "https://app.example:8443", 403},
+            {:https, "app.example", "https://app.example", 200},
+            {:https, "app.example", "http://app.example", 403},
+            {:http, "app.example", "http://app.example", 200},
+            {:http, "app.example", "https://app.example", 403}
+          ],
+          {method, action} <- [{:post, :record}, {:delete, :forget}] do
+        direct =
+          call(method, action, @decision, [{"host", host}, {"origin", origin}], %{
+            scheme: scheme
+          })
+
+        assert direct.status == status
+
+        proxied =
+          call(method, action, @decision, [
+            {"host", "10.0.0.5:4000"},
+            {"x-forwarded-host", host},
+            {"x-forwarded-proto", Atom.to_string(scheme)},
+            {"origin", origin}
+          ])
+
+        assert proxied.status == status
       end
     end
   end
@@ -302,6 +344,7 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
         refuse("https://www.shop.example", [
           {"host", "10.0.0.5:4000"},
           {"x-forwarded-host", "edge.example"},
+          {"x-forwarded-proto", "https"},
           {"cookie", "pk_consent=secret-cookie"}
         ])
 

@@ -137,7 +137,6 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   """
   @spec fetch_declared(String.t(), keyword()) :: {:ok, [entry()]} | {:error, term()}
   def fetch_declared(language, opts \\ []) when is_binary(language) and is_list(opts) do
-    modules = Keyword.get_lazy(opts, :modules, &enabled_modules/0)
     timeout = Keyword.get(opts, :timeout, @fetch_timeout)
 
     task =
@@ -146,6 +145,9 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
         # whatever happens instead of taking the caller down with it.
         try do
           Gettext.put_locale(language)
+          # Discovery belongs inside the bounded task too. Its failure must
+          # not become a successful policy generated from an empty list.
+          modules = Keyword.get_lazy(opts, :modules, &ModuleRegistry.enabled_modules/0)
           {:ok, collect(modules)}
         rescue
           error -> {:error, error}

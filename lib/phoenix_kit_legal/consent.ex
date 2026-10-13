@@ -221,6 +221,10 @@ defmodule PhoenixKit.Modules.Legal.Consent do
   def read(%Plug.Conn{} = conn) do
     conn = fetch_cookies(conn)
     decode(conn.cookies[@cookie], conn.secret_key_base)
+  rescue
+    _ -> :none
+  catch
+    :exit, _ -> :none
   end
 
   def read(_other), do: :none
@@ -250,8 +254,11 @@ defmodule PhoenixKit.Modules.Legal.Consent do
   (`Sec-GPC: 1`). An objection needs no cookie: it is there on the first
   request.
   """
-  @spec objected?(Plug.Conn.t()) :: boolean()
-  def objected?(%Plug.Conn{} = conn), do: get_req_header(conn, "sec-gpc") == ["1"]
+  @spec objected?(term()) :: boolean()
+  def objected?(%Plug.Conn{req_headers: headers} = conn) when is_list(headers),
+    do: get_req_header(conn, "sec-gpc") == ["1"]
+
+  def objected?(_other), do: false
 
   @doc """
   Turns a cookie value back into a decision — `:none` unless it was signed
@@ -268,6 +275,10 @@ defmodule PhoenixKit.Modules.Legal.Consent do
     else
       _ -> :none
     end
+  rescue
+    _ -> :none
+  catch
+    :exit, _ -> :none
   end
 
   def decode(_value, _secret_key_base), do: :none

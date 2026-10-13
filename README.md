@@ -528,10 +528,12 @@ categories, is not logged twice for the same decision, and is rate-limited
 (20 writes a minute per address, per /64 for IPv6; `POST` and `DELETE`
 share the count). It answers 404 while the module or the banner is off.
 
-"From the site itself" means: an `Origin` whose host **and port** match the
+"From the site itself" means: an `Origin` whose scheme, host **and port** match the
 request's `Host` header, the `x-forwarded-host` a proxy set, or the `site_url`
 setting (default ports dropped; the same host on another port is another
-origin and is refused). When there is no `Origin`, or it is `null` — which a
+origin and is refused). The scheme comes from `x-forwarded-proto` when a proxy
+terminates TLS, otherwise from the request; `site_url` carries its own scheme.
+When there is no `Origin`, or it is `null` — which a
 browser also sends on a same-origin write under `Referrer-Policy:
 no-referrer` — `Sec-Fetch-Site` decides: `same-origin` and `none` pass,
 `same-site` and `cross-site` do not. A request with neither header is not
@@ -568,7 +570,16 @@ mix dialyzer       # Type checking
 mix docs           # Generate documentation
 mix precommit      # Compile + format + credo + dialyzer
 mix quality        # Format + credo + dialyzer
+node --test test/javascript/consent_test.cjs # Consent behavior and request races
 ```
+
+The JavaScript tests use Node's built-in test runner and require no npm
+dependencies. For a browser check, run
+`node test/javascript/consent_browser_test.cjs` with Playwright and Chromium
+installed. It serves a temporary host page without a consent component,
+loads core's bundled script first, and checks widget injection, preferences,
+withdrawal, cross-tab reloads and ordered requests. Its endpoint is a fixture;
+the Elixir integration tests verify signed cookies and audit writes.
 
 ## Dependencies
 

@@ -75,6 +75,14 @@ defmodule PhoenixKit.Modules.Legal.DataCollectionTest do
     end
   end
 
+  defmodule Unavailable do
+    def enabled?, do: exit(:registry_unavailable)
+  end
+
+  defmodule SlowDiscovery do
+    def enabled?, do: Process.sleep(:infinity)
+  end
+
   defmodule Switched do
     def module_key, do: "switched"
 
@@ -103,6 +111,43 @@ defmodule PhoenixKit.Modules.Legal.DataCollectionTest do
     PhoenixKit.Cache.put(:settings, "legal_hidden_collection", %{"items" => []})
     PhoenixKit.Cache.put(:settings, "legal_consent_widget_enabled", "true")
     :ok
+  end
+
+  describe "module discovery failures" do
+    setup do
+      key = {PhoenixKit, :registered_modules}
+      previous = :persistent_term.get(key, :absent)
+
+      on_exit(fn ->
+        if previous == :absent,
+          do: :persistent_term.erase(key),
+          else: :persistent_term.put(key, previous)
+      end)
+
+      {:ok, registry_key: key}
+    end
+
+    test "an unavailable registry fails policy generation instead of declaring nothing", %{
+      registry_key: key
+    } do
+      :persistent_term.put(key, [Unavailable])
+      assert PhoenixKit.ModuleRegistry.all_modules() == [Unavailable]
+
+      assert DataCollection.fetch_declared("en") == {:error, {:exit, :registry_unavailable}}
+
+      assert Legal.template_collection("en") ==
+               {:error, {:data_collection, {:exit, :registry_unavailable}}}
+
+      SettingsRecorder.install()
+      assert {:error, _} = DataCollection.remember_generated()
+      assert SettingsRecorder.written() == []
+    end
+
+    test "the timeout includes discovering which modules are enabled", %{registry_key: key} do
+      :persistent_term.put(key, [SlowDiscovery])
+      assert PhoenixKit.ModuleRegistry.all_modules() == [SlowDiscovery]
+      assert DataCollection.fetch_declared("en", timeout: 20) == {:error, :timeout}
+    end
   end
 
   describe "collect/1" do
@@ -706,7 +751,7 @@ defmodule PhoenixKit.Modules.Legal.JsSourcesTest do
     refute source =~ "document.cookie"
     # …a revocation is retried until the server has heard it…
     assert source =~ ~s(const REVOKE_PENDING_KEY = "pk_consent_revoke_pending";)
-    assert source =~ "if (forgotten) setRevokePending(false);"
+    assert source =~ "if (forgotten && revision === decisionRevision) setRevokePending(false);"
     assert source =~ "revokeOnServer().then("
     # …carries its time, and never deletes a decision the server took later…
     assert source =~ "localStorage.setItem(REVOKE_PENDING_KEY, String(Date.now()));"

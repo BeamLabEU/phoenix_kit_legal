@@ -10,8 +10,7 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   the write honest is in this module rather than in a session:
 
     * **Same origin only.** A browser sends `Origin` on every cross-origin
-      `POST`/`DELETE`; one that names another host — or the same host on
-      another port, which shares the cookie but is another origin — is
+      `POST`/`DELETE`; one that names another scheme, host or port is
       refused, so a third-party page cannot record a "yes" in a visitor's
       name. What counts as this site is the request's `Host`, the
       `x-forwarded-host` a proxy set, or the configured `site_url`.
@@ -192,9 +191,16 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   #     preflight this endpoint does not answer);
   #   * the operator's `site_url`.
   #
-  # A header carries no scheme, so a missing port is the default of the
-  # scheme the `Origin` came with.
+  # The request scheme (forwarded by a TLS proxy) must match too; a URL
+  # configured in site_url has its own scheme. A missing header port takes
+  # the matching scheme's default.
   defp own_authorities(conn, scheme) do
+    request_scheme =
+      case get_req_header(conn, "x-forwarded-proto") do
+        [proto | _] when proto in ["http", "https"] -> proto
+        _ -> Atom.to_string(conn.scheme)
+      end
+
     host =
       case get_req_header(conn, "host") do
         [value | _] -> header_authority(value, scheme)
@@ -208,7 +214,8 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
       |> Enum.flat_map(&String.split(&1, ","))
       |> Enum.map(&header_authority(String.trim(&1), scheme))
 
-    Enum.reject([host, site_url_authority() | forwarded], &is_nil/1)
+    request_authorities = if scheme == request_scheme, do: [host | forwarded], else: []
+    Enum.reject([site_url_authority(scheme) | request_authorities], &is_nil/1)
   end
 
   defp header_authority(value, scheme) do
@@ -218,9 +225,10 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
     end
   end
 
-  defp site_url_authority do
+  defp site_url_authority(scheme) do
     with url when is_binary(url) and url != "" <- Settings.get_setting_cached("site_url", nil),
-         %URI{host: host, port: port} when is_binary(host) and host != "" <- URI.parse(url) do
+         %URI{scheme: ^scheme, host: host, port: port}
+         when is_binary(host) and host != "" <- URI.parse(url) do
       authority(host, port)
     else
       _ -> nil

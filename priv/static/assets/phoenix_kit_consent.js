@@ -90,6 +90,18 @@
     }
   };
 
+  var decisionRevision = 0;
+  var writeQueue = Promise.resolve();
+  var listenersInstalled = false;
+
+  // Cookies from concurrent responses can arrive in the wrong order. Keep
+  // this tab's POSTs and DELETEs in the order the visitor made them.
+  function queueWrite(write) {
+    var result = writeQueue.then(write);
+    writeQueue = result.catch(function() {});
+    return result;
+  }
+
   // =====================================================
   // UTILITIES
   // =====================================================
@@ -336,21 +348,32 @@
     if (!endpoint || typeof fetch !== "function") return;
     if (reconciledAlready()) return;
     setReconciled(true);
+    var revision = decisionRevision;
 
     function handOver() {
-      return reportConsent(consent, "sync").then(function(recorded) {
+      return reportConsent(consent, "sync", revision).then(function(recorded) {
         if (!recorded) setReconciled(false);
       });
     }
 
     fetchServerConsent().then(function(answer) {
+      if (revision !== decisionRevision || PhoenixKitConsent.consent !== consent) return;
       if (answer.status !== 200) throw new Error("Consent endpoint returned " + answer.status);
       var server = answer.body || {};
 
       if (!server.decided || server.version !== PhoenixKitConsent.config.policyVersion) {
         return handOver();
       }
-      if (sameCategories(server.consent, consent)) return;
+      if (sameCategories(server.consent, consent)) {
+        if (consent.pending) {
+          delete consent.pending;
+          saveConsent(consent);
+        }
+        return;
+      }
+      // An undelivered local choice is newer than the cookie, regardless of
+      // clock skew between this device and the server.
+      if (consent.pending) return handOver();
       if (server.decided_at > decidedAt(consent)) return adoptServerConsent(server);
       return handOver();
     }).catch(function(err) {
@@ -396,8 +419,9 @@
   }
 
   function deliverRevoke() {
+    var revision = decisionRevision;
     return forgetServerConsent().then(function(forgotten) {
-      if (forgotten) setRevokePending(false);
+      if (forgotten && revision === decisionRevision) setRevokePending(false);
       return forgotten;
     });
   }
@@ -414,7 +438,9 @@
       return;
     }
 
+    var revision = decisionRevision;
     fetchServerConsent().then(function(answer) {
+      if (revision !== decisionRevision) return;
       // 404: the banner is switched off, and the endpoint with it.
       if (answer.status === 404) return setRevokePending(false);
       if (answer.status !== 200) return;
@@ -451,29 +477,37 @@
     return false;
   }
 
-  function reportConsent(consent, source) {
+  function reportConsent(consent, source, revision) {
     var endpoint = PhoenixKitConsent.config.consentEndpoint;
     if (!endpoint || typeof fetch !== "function") return Promise.resolve(false);
 
-    return fetch(endpoint, {
-      method: "POST",
-      credentials: "same-origin",
-      keepalive: true,
-      headers: { "content-type": "application/json", "accept": "application/json" },
-      body: JSON.stringify({
-        consent: {
-          analytics: !!consent.analytics,
-          marketing: !!consent.marketing,
-          preferences: !!consent.preferences
-        },
-        source: source
-      })
-    }).then(function(response) {
-      if (!response.ok) log("Consent endpoint returned " + response.status);
-      return response.ok;
-    }).catch(function(err) {
-      log("Could not report consent", err);
-      return false;
+    return queueWrite(function() {
+      // A sync queued behind a write must not put back an earlier choice.
+      if (revision !== undefined && revision !== decisionRevision) return true;
+      return fetch(endpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+        headers: { "content-type": "application/json", "accept": "application/json" },
+        body: JSON.stringify({
+          consent: {
+            analytics: !!consent.analytics,
+            marketing: !!consent.marketing,
+            preferences: !!consent.preferences
+          },
+          source: source
+        })
+      }).then(function(response) {
+        if (!response.ok) log("Consent endpoint returned " + response.status);
+        if (response.ok && PhoenixKitConsent.consent === consent && consent.pending) {
+          delete consent.pending;
+          saveConsent(consent);
+        }
+        return response.ok;
+      }).catch(function(err) {
+        log("Could not report consent", err);
+        return false;
+      });
     });
   }
 
@@ -484,16 +518,18 @@
     var endpoint = PhoenixKitConsent.config.consentEndpoint;
     if (!endpoint || typeof fetch !== "function") return Promise.resolve(true);
 
-    return fetch(endpoint, {
-      method: "DELETE",
-      credentials: "same-origin",
-      keepalive: true,
-      headers: { "accept": "application/json" }
-    }).then(function(response) {
-      return response.ok || response.status === 404;
-    }).catch(function(err) {
-      log("Could not forget consent", err);
-      return false;
+    return queueWrite(function() {
+      return fetch(endpoint, {
+        method: "DELETE",
+        credentials: "same-origin",
+        keepalive: true,
+        headers: { "accept": "application/json" }
+      }).then(function(response) {
+        return response.ok || response.status === 404;
+      }).catch(function(err) {
+        log("Could not forget consent", err);
+        return false;
+      });
     });
   }
 
@@ -531,9 +567,17 @@
       if (getStoredVersion() === PhoenixKitConsent.config.policyVersion) {
         reconcileWithServer(stored);
       }
-    } else if (isOptInMode() && PhoenixKitConsent.config.consentMode === "strict") {
-      // Only block scripts in strict mode
-      blockScripts();
+    } else {
+      // A LiveView remount can outlive the stored choice. Retire the old
+      // in-memory grants as well as showing the banner again.
+      if (PhoenixKitConsent.consent) {
+        decisionRevision++;
+        PhoenixKitConsent.consent = null;
+        applyConsent({ necessary: true, analytics: false, marketing: false, preferences: false });
+      }
+      if (isOptInMode() && PhoenixKitConsent.config.consentMode === "strict") {
+        blockScripts();
+      }
     }
   }
 
@@ -542,10 +586,12 @@
   // something was taken back, since a script that already ran cannot be
   // un-run and a page already loaded was served under the old choice.
   function decide(consent, source) {
+    decisionRevision++;
     var before = PhoenixKitConsent.consent;
     var reload = PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, consent);
 
     PhoenixKitConsent.consent = consent;
+    consent.pending = true;
     saveConsent(consent);
     // A new decision replaces a revocation still waiting to be delivered.
     setRevokePending(false);
@@ -557,7 +603,7 @@
       window.dispatchEvent(new CustomEvent("phx:consent-recorded", {
         detail: { consent: consent, recorded: recorded }
       }));
-      if (reload) window.location.reload();
+      if (reload && PhoenixKitConsent.consent === consent) window.location.reload();
     });
   }
 
@@ -566,6 +612,12 @@
   // =====================================================
 
   function setupCrossTabSync() {
+    if (listenersInstalled) return;
+    listenersInstalled = true;
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") hideModal();
+    });
+
     window.addEventListener("storage", function(e) {
       // Removed in another tab — the key itself, or all of storage
       // (`e.key` is null then): the visitor took their consent back there,
@@ -574,9 +626,15 @@
       // listeners (`phx:consent-updated`); forgetting it in memory alone
       // would leave them on the old answer.
       if (e.key === null || (e.key === STORAGE_KEY && e.newValue === null)) {
+        var before = PhoenixKitConsent.consent;
+        decisionRevision++;
         PhoenixKitConsent.consent = null;
-        applyConsent({ necessary: true, analytics: false, marketing: false, preferences: false });
+        var none = { necessary: true, analytics: false, marketing: false, preferences: false };
+        applyConsent(none);
         updateUI();
+        if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, none)) {
+          window.location.reload();
+        }
         log("Cross-tab sync: consent revoked");
         return;
       }
@@ -585,9 +643,14 @@
 
       try {
         var newConsent = JSON.parse(e.newValue);
+        var before = PhoenixKitConsent.consent;
+        decisionRevision++;
         PhoenixKitConsent.consent = newConsent;
         applyConsent(newConsent);
         updateUI();
+        if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, newConsent)) {
+          window.location.reload();
+        }
         log("Cross-tab sync: consent updated");
       } catch (err) {
         log("Cross-tab sync error", err);
@@ -1033,22 +1096,25 @@
   };
 
   PhoenixKitConsent.revokeConsent = function() {
+    var before = PhoenixKitConsent.consent;
+    var revision = ++decisionRevision;
+    var none = { necessary: true, analytics: false, marketing: false, preferences: false };
+    PhoenixKitConsent.consent = null;
+    applyConsent(none);
     try {
-      var before = PhoenixKitConsent.consent;
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(VERSION_KEY);
-      PhoenixKitConsent.consent = null;
-      updateUI();
-      revokeOnServer().then(function() {
-        var none = { necessary: true, analytics: false, marketing: false, preferences: false };
-        if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, none)) {
-          window.location.reload();
-        }
-      });
-      log("Consent revoked");
     } catch (e) {
-      log("Could not revoke consent", e);
+      log("Could not clear stored consent", e);
     }
+    updateUI();
+    revokeOnServer().then(function() {
+      if (revision === decisionRevision &&
+          PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, none)) {
+        window.location.reload();
+      }
+    });
+    log("Consent revoked");
   };
 
   // =====================================================
@@ -1096,13 +1162,6 @@
 
     // Update UI
     updateUI();
-
-    // Handle Escape key
-    document.addEventListener("keydown", function(e) {
-      if (e.key === "Escape") {
-        hideModal();
-      }
-    });
 
     PhoenixKitConsent.initialized = true;
     log("Initialized with config", PhoenixKitConsent.config);
@@ -1157,12 +1216,6 @@
     restoreConsent();
 
     updateUI();
-
-    document.addEventListener("keydown", function(e) {
-      if (e.key === "Escape") {
-        hideModal();
-      }
-    });
 
     PhoenixKitConsent.initialized = true;
     log("Initialized from element", PhoenixKitConsent.config);
