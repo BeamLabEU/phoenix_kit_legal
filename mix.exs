@@ -60,12 +60,13 @@ defmodule PhoenixKitLegal.MixProject do
       # 1.7.184 adds `disabled`/`wrapper_class`/`title`/`:description` to
       # `PhoenixKitWeb.Components.Core.Checkbox`, used here. 1.7.189 adds the
       # runtime schema-prefix support `PhoenixKit.SchemaPrefix` relies on.
-      # 1.7.227 is a hard floor, not a preference: it owns
-      # `PhoenixKitWeb.Controllers.ConsentConfigController`, which this package
-      # defined through 0.1.9 and no longer does. Core declares that route
-      # whenever this module is loaded, so on an older core the route resolves to
-      # a module that exists nowhere — UndefinedFunctionError, on every request
-      # the bundled JS makes. See AGENTS.md, "Consent Config Endpoint Contract".
+      # 1.7.227 is a hard floor, not a preference: from there core owns the
+      # consent-config route and its controller
+      # (`PhoenixKitWeb.Controllers.ConsentConfig`), which this package defined
+      # as `…ConsentConfigController` through 0.1.9 and no longer does. On an
+      # older core the route resolves to a module that exists nowhere —
+      # UndefinedFunctionError, on every request the bundled JS makes. See
+      # AGENTS.md, "Feature notes".
       {:phoenix_kit, "~> 2.0"},
       # Build MDEx's Rust NIF from source on OTP versions it ships no
       # compatible precompiled NIF for — same escape hatch core's mix.exs
