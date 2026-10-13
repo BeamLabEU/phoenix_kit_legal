@@ -144,6 +144,7 @@ defmodule PhoenixKit.Modules.Legal.SettingsWritersTest do
         phoenix_kit_current_scope: scope,
         selected_frameworks: ["gdpr"],
         hidden_collection: ["shop.cart"],
+        collection: [%{key: "shop.ads"}, %{key: "shop.cart"}],
         consent_widget_enabled: true
       }
 
@@ -216,6 +217,19 @@ defmodule PhoenixKit.Modules.Legal.SettingsWritersTest do
         # Not the consent mode, not the icon position: nothing.
         assert SettingsRecorder.written() == [], inspect(days)
       end
+    end
+
+    # The event carries a key the client chose, and the hidden list is stored.
+    test "a key the page does not list cannot be hidden" do
+      assert {:noreply, socket} =
+               SettingsLive.handle_event(
+                 "toggle_collection",
+                 %{"key" => "not.on.the.page"},
+                 socket(%{})
+               )
+
+      assert SettingsRecorder.written() == []
+      assert socket.assigns.hidden_collection == ["shop.cart"]
     end
 
     test "nobody signed in is still a change made on the settings page" do

@@ -614,8 +614,14 @@ defmodule PhoenixKit.Modules.Legal do
     end
   end
 
-  # A JSON setting read from the setting itself rather than through the
-  # cache, which trails a write — for code about to change what it reads.
+  # A setting read from the setting itself rather than through the cache,
+  # which trails a write — for code that has just written what it reads.
+  @doc false
+  @spec fresh_setting(String.t(), term()) :: term()
+  def fresh_setting(key, default) when is_binary(key),
+    do: settings_writer().get_setting(key, default)
+
+  # The same for a JSON setting — for code about to change what it reads.
   @doc false
   @spec fresh_json_setting(String.t(), term()) :: term()
   def fresh_json_setting(key, default) when is_binary(key),

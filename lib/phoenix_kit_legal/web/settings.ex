@@ -352,19 +352,25 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
   @impl true
   def handle_event("toggle_collection", %{"key" => key}, socket) do
-    result =
-      if key in socket.assigns.hidden_collection,
-        do: DataCollection.show(key, actor_opts(socket)),
-        else: DataCollection.hide(key, actor_opts(socket))
+    cond do
+      key in socket.assigns.hidden_collection ->
+        toggle_collection(socket, DataCollection.show(key, actor_opts(socket)))
 
-    case result do
-      {:ok, hidden} ->
-        {:noreply, assign_collection(socket, hidden)}
+      # Only what is listed on the page can be hidden: the event carries a
+      # key of the client's choosing, and the list is stored.
+      Enum.any?(socket.assigns.collection, &(&1.key == key)) ->
+        toggle_collection(socket, DataCollection.hide(key, actor_opts(socket)))
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
+      true ->
+        {:noreply, socket}
     end
   end
+
+  defp toggle_collection(socket, {:ok, hidden}),
+    do: {:noreply, assign_collection(socket, hidden)}
+
+  defp toggle_collection(socket, {:error, _}),
+    do: {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
 
   defp assign_consent_record(socket) do
     assign(socket, :consent_record, %{
@@ -407,7 +413,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     socket
     |> assign(:collection, entries)
     |> assign(:hidden_collection, hidden)
-    |> assign(:policy_outdated, DataCollection.policy_outdated?())
+    |> assign(:policy_outdated, DataCollection.policy_outdated?(hidden: hidden, fresh: true))
   end
 
   defp consent_record_params(params) do

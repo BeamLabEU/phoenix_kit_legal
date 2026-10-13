@@ -538,6 +538,49 @@ defmodule PhoenixKit.Modules.Legal.DataCollectionTest do
     end
   end
 
+  describe "policy_outdated?/1" do
+    setup do
+      PhoenixKit.Cache.put(:settings, "legal_hidden_collection", %{"items" => []})
+      {:ok, entries} = DataCollection.fetch_declared("en", modules: [Declaring])
+      {:ok, entries: entries}
+    end
+
+    # The cache trails a write: a page that has just hidden an entry must be
+    # able to say what it knows rather than be handed the list from before.
+    test "compares with the hidden list it is given, not the cached one", %{entries: entries} do
+      PhoenixKit.Cache.put(
+        :settings,
+        "legal_policy_collection_fingerprint",
+        entries |> DataCollection.listed() |> DataCollection.fingerprint()
+      )
+
+      refute DataCollection.policy_outdated?(modules: [Declaring])
+      assert DataCollection.policy_outdated?(modules: [Declaring], hidden: ["shop.cart"])
+    end
+
+    test "reads the stored fingerprint from the setting itself when asked", %{entries: entries} do
+      SettingsRecorder.install()
+      current = entries |> DataCollection.listed() |> DataCollection.fingerprint()
+
+      # The cache still holds what was stored before the policy was regenerated.
+      PhoenixKit.Cache.put(:settings, "legal_policy_collection_fingerprint", "0000000000000000")
+      SettingsRecorder.seed_setting("legal_policy_collection_fingerprint", current)
+
+      assert DataCollection.policy_outdated?(modules: [Declaring])
+      refute DataCollection.policy_outdated?(modules: [Declaring], fresh: true)
+    end
+  end
+
+  describe "listed/2" do
+    test "takes the hidden keys from the caller when it has them" do
+      {:ok, entries} = DataCollection.fetch_declared("en", modules: [Declaring])
+      PhoenixKit.Cache.put(:settings, "legal_hidden_collection", %{"items" => []})
+
+      assert [%{key: "shop.cart"}] = DataCollection.listed(entries)
+      assert [] = DataCollection.listed(entries, hidden: ["shop.cart"])
+    end
+  end
+
   describe "policy_outdated?/0" do
     test "is false until a policy was generated from a list" do
       PhoenixKit.Cache.put(:settings, "legal_policy_collection_fingerprint", "")

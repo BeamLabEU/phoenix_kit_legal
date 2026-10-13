@@ -164,10 +164,14 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   @doc """
   What the banner and the policy show: active, collected in some way (a mode
   other than `:off`) and not hidden by the operator.
+
+  `:hidden` is the list of hidden keys to use instead of reading it — for a
+  caller that has just written the list, since the settings cache trails a
+  write (see `hidden_keys/1`).
   """
-  @spec listed([entry()]) :: [entry()]
-  def listed(entries \\ declared()) do
-    hidden = hidden_keys()
+  @spec listed([entry()], keyword()) :: [entry()]
+  def listed(entries \\ declared(), opts \\ []) do
+    hidden = Keyword.get_lazy(opts, :hidden, &hidden_keys/0)
     Enum.filter(entries, &(&1.active and &1.mode != :off and &1.key not in hidden))
   end
 
@@ -306,13 +310,23 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   Whether what the site collects has changed since the cookie policy was
   generated. `false` when no policy was ever generated from a list, and when
   the list cannot be gathered to compare.
+
+  ## Options
+
+    * `:hidden` — the hidden keys to compare with, instead of reading them
+    * `:fresh` — read the stored fingerprint from the setting itself rather
+      than the cache, for a caller that has just generated the policy
+    * `:modules` — the modules to ask (default: every enabled module)
+
+  The settings cache trails a write, so a page that has just changed the
+  hidden list or regenerated the policy passes both, and is not told the
+  state from before.
   """
-  @spec policy_outdated?() :: boolean()
-  def policy_outdated? do
-    with stored when is_binary(stored) and stored != "" <-
-           Settings.get_setting_cached(@fingerprint_key, nil),
-         {:ok, entries} <- fetch_declared(@fingerprint_language) do
-      stored != entries |> listed() |> fingerprint()
+  @spec policy_outdated?(keyword()) :: boolean()
+  def policy_outdated?(opts \\ []) do
+    with stored when is_binary(stored) and stored != "" <- stored_fingerprint(opts),
+         {:ok, entries} <- fetch_declared(@fingerprint_language, Keyword.take(opts, [:modules])) do
+      stored != entries |> listed(Keyword.take(opts, [:hidden])) |> fingerprint()
     else
       {:error, reason} ->
         Logger.warning(
@@ -325,6 +339,12 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
       _ ->
         false
     end
+  end
+
+  defp stored_fingerprint(opts) do
+    if Keyword.get(opts, :fresh, false),
+      do: Legal.fresh_setting(@fingerprint_key, nil),
+      else: Settings.get_setting_cached(@fingerprint_key, nil)
   end
 
   # ── internals ─────────────────────────────────────────────────────────────
