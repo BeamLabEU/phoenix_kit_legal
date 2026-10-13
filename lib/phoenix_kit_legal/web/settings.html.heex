@@ -232,6 +232,7 @@
                         type="button"
                         class="btn btn-outline join-item"
                         phx-click="import_dpo_email"
+                        phx-disable-with={gettext("Importing...")}
                         title={gettext("Import from General Settings")}
                       >
                         <.icon name="hero-arrow-down-tray" class="w-4 h-4" />
@@ -275,6 +276,7 @@
                         type="button"
                         class="btn btn-outline join-item"
                         phx-click="import_dpo_address"
+                        phx-disable-with={gettext("Importing...")}
                         title={gettext("Import from Company Address")}
                       >
                         <.icon name="hero-arrow-down-tray" class="w-4 h-4" />
@@ -292,7 +294,11 @@
               </div>
 
               <div class="card-actions justify-end mt-4">
-                <button type="submit" class="btn btn-primary">
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  phx-disable-with={gettext("Saving...")}
+                >
                   {gettext("Save DPO Contact")}
                 </button>
               </div>
@@ -314,6 +320,7 @@
             </div>
             <button
               phx-click="reset_legal_pages"
+              phx-disable-with={gettext("Resetting...")}
               data-confirm={gettext("This will delete all legal pages and their group. You will need to regenerate them. Continue?")}
               class="btn btn-warning btn-sm"
             >
@@ -349,6 +356,7 @@
                 <% end %>
                 <button
                   phx-click="generate_all_pages"
+                  phx-disable-with={gettext("Generating...")}
                   phx-value-language={@selected_generation_language}
                   class="btn btn-primary"
                   disabled={@generating or Enum.empty?(@selected_frameworks)}
@@ -451,6 +459,7 @@
                                 <%= if get_page_status(page_type, @generated_pages) != "published" do %>
                                   <button
                                     phx-click="publish_page"
+                                    phx-disable-with={gettext("Publishing...")}
                                     phx-value-page_slug={page_type}
                                     class="btn btn-sm btn-success"
                                   >
@@ -460,6 +469,7 @@
                               <% end %>
                               <button
                                 phx-click="generate_page"
+                                phx-disable-with={gettext("Generating...")}
                                 phx-value-page_type={page_type}
                                 phx-value-language={@selected_generation_language}
                                 class="btn btn-sm btn-outline"
@@ -717,8 +727,77 @@
                   </.checkbox>
                 </div>
 
+                <%!-- The server's record of each decision --%>
+                <div class="fieldset space-y-3" id="consent-record-settings">
+                  <span class="fieldset-legend font-medium">{gettext("Record of decisions")}</span>
+                  <p class="text-sm text-base-content/60">
+                    {gettext(
+                      "Each decision is reported to the server, which sets a signed cookie that server-side collection obeys."
+                    )}
+                  </p>
+
+                  <.checkbox
+                    name="consent_log"
+                    checked={@consent_record.log}
+                    label={gettext("Keep a log of each decision")}
+                  >
+                    <:description>
+                      {gettext(
+                        "What was agreed to and refused, when, and under which policy version. This is what shows that a visitor was asked."
+                      )}
+                    </:description>
+                  </.checkbox>
+
+                  <.checkbox
+                    name="consent_log_ip"
+                    checked={@consent_record.log_ip}
+                    label={gettext("Keep the visitor's IP address with it")}
+                  >
+                    <:description>
+                      {gettext(
+                        "Off by default: the log shows a decision was made without saying who made it."
+                      )}
+                    </:description>
+                  </.checkbox>
+
+                  <.checkbox
+                    name="consent_log_user_agent"
+                    checked={@consent_record.log_user_agent}
+                    label={gettext("Keep a hash of the browser's User-Agent with it")}
+                  />
+
+                  <.checkbox
+                    name="consent_reload_on_withdrawal"
+                    checked={@consent_record.reload_on_withdrawal}
+                    label={gettext("Reload the page when a visitor takes a consent back")}
+                  >
+                    <:description>
+                      {gettext(
+                        "A script that already ran cannot be stopped; a reload serves the page under the new choice."
+                      )}
+                    </:description>
+                  </.checkbox>
+
+                  <label class="flex flex-wrap items-center gap-3" for="consent_cookie_days">
+                    <span class="text-sm">{gettext("Ask again after (days)")}</span>
+                    <input
+                      type="number"
+                      id="consent_cookie_days"
+                      name="consent_cookie_days"
+                      value={@consent_record.cookie_days}
+                      min="1"
+                      max={@consent_record.max_days}
+                      class="input input-bordered input-sm w-24"
+                    />
+                  </label>
+                </div>
+
                 <div class="card-actions justify-end">
-                  <button type="submit" class="btn btn-primary">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    phx-disable-with={gettext("Saving...")}
+                  >
                     {gettext("Save Settings")}
                   </button>
                 </div>
@@ -819,6 +898,76 @@
                 </div>
               </div>
             <% end %>
+          </div>
+        </div>
+
+        <%!-- Section 6: What the site collects, as its modules declare it --%>
+        <div class="card bg-base-100 shadow" id="legal-data-collection">
+          <div class="card-body">
+            <h2 class="card-title">{gettext("What this site collects")}</h2>
+            <p class="text-sm text-base-content/60 mb-2">
+              {gettext(
+                "Declared by the modules that collect it. Ticked entries are named in the cookie banner and in the generated Cookie Policy. How each one is collected is set in its own module."
+              )}
+            </p>
+
+            <div :if={@policy_outdated} role="alert" class="alert alert-warning mb-2">
+              <span>
+                {gettext(
+                  "This list has changed since the Cookie Policy was generated. Generate it again so it says what the site does now."
+                )}
+              </span>
+            </div>
+
+            <p :if={@collection == []} class="text-sm text-base-content/60">
+              {gettext("No enabled module declares that it collects anything.")}
+            </p>
+
+            <ul class="divide-y divide-base-300">
+              <li
+                :for={entry <- @collection}
+                class="py-3 flex items-start gap-3"
+                data-collection-key={entry.key}
+              >
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-primary mt-1"
+                  id={"collection-#{entry.key}"}
+                  checked={entry.key not in @hidden_collection}
+                  phx-click="toggle_collection"
+                  phx-value-key={entry.key}
+                  aria-label={gettext("Tell visitors about %{title}", title: entry.title)}
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <label for={"collection-#{entry.key}"} class="font-medium cursor-pointer">
+                      {entry.title}
+                    </label>
+                    <span class="badge badge-sm badge-ghost">{category_label(entry.category)}</span>
+                    <span class={[
+                      "badge badge-sm",
+                      if(entry.active, do: "badge-outline", else: "badge-ghost")
+                    ]}>
+                      {if entry.active,
+                        do: DataCollection.mode_label(entry.mode),
+                        else: DataCollection.mode_label(:off)}
+                    </span>
+                  </div>
+                  <p :if={entry.description != ""} class="text-sm text-base-content/70 mt-1">
+                    {entry.description}
+                  </p>
+                  <p :if={entry.data != []} class="text-xs text-base-content/60 mt-1">
+                    {Enum.join(entry.data, " · ")}
+                  </p>
+                  <p :if={entry.retention} class="text-xs text-base-content/60 mt-1">
+                    {gettext("Kept for %{period}", period: entry.retention)}
+                  </p>
+                  <p :for={warning <- entry.warnings} class="text-sm text-warning mt-1">
+                    {warning}
+                  </p>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
       <% end %>

@@ -264,8 +264,10 @@ The consent widget provides a glass-morphic UI with:
 - Dark mode support via daisyUI CSS variables
 - ARIA-compliant accessibility
 - localStorage persistence with cross-tab sync
-- Automatic DOM injection (no layout changes required)
+- Automatic DOM injection (no layout changes required) — the script ships in the host's `phoenix_kit_modules.js` via `js_sources/0`
 - Authentication-aware display (optional hide for logged-in users)
+- A server-side record of each decision: a signed first-party cookie and an audit log entry
+- Each category's toggle lists what it covers on this site, as the site's modules declare it
 
 ### Google Consent Mode v2
 
@@ -315,27 +317,129 @@ All templates receive:
 | `@frameworks` | List of selected framework IDs |
 | `@effective_date` | Current date (ISO format) |
 | `@language` | Language code |
+| `@data_collection` | What the site's modules declare they collect, grouped by consent category (see below) |
 
-## Consent Logging
+`@data_collection` is a map with the four keys `"necessary"`, `"analytics"`,
+`"marketing"` and `"preferences"`, each a list of entries (`title`,
+`description`, `data`, `retention`, `basis`, `storage`). The bundled Cookie
+Policy is written from it; a custom template can ignore it. A map has no
+order of its own — read the categories by name, as the bundled template does
+(necessary, analytics, preferences, marketing). The text in it is already
+safe for Markdown: a `|` is escaped and a line break is a space, so a
+declaration cannot break a table row. `TemplateGenerator.render/3` called
+with a context that leaves the variable out gets all four categories empty.
 
-Full audit trail for GDPR compliance:
+If the declarations cannot be gathered, `generate_page/2` returns
+`{:error, {:data_collection, reason}}` rather than writing a policy that says
+the site collects nothing.
+
+## Consent: the server's record
+
+The banner keeps a visitor's decision in `localStorage`, which a server cannot
+read. So each decision is also reported to the server, which does two things
+with it:
+
+- **Sets a cookie**, `pk_consent`: the decision as JSON, signed with a key
+  derived from the endpoint's `secret_key_base`. A visitor (and the page's
+  scripts) can read it; nobody can forge one the server will believe. It
+  carries no identity — a random consent ID (`id`), the policy version (`v`),
+  the categories (`c`), the source (`s`), when the decision was made (`t`),
+  and one boolean (`u`) saying whether its log entry names a user. It is
+  `Secure` when the visitor came over https, including through a proxy that
+  says so in `x-forwarded-proto`.
+- **Writes the audit log**: one `phoenix_kit_consent_logs` row per category,
+  keyed by the consent ID, with the signed-in user's UUID when there is one.
+  A decision made signed out is logged once more, with the user, the first
+  time it arrives again after sign-in. The visitor's IP address and a hash of
+  their User-Agent are added only when the two settings below ask for them.
+
+Server-side code asks before it collects:
+
+```elixir
+alias PhoenixKit.Modules.Legal.Consent
+
+Consent.status(conn, "analytics")   # :granted | :denied | :unknown
+Consent.objected?(conn)             # true when the browser sends Sec-GPC: 1
+Consent.read(conn)                  # {:ok, %Consent{}} | :none
+```
+
+All three read the request and make no database query of their own, so they
+are safe on a hot path; the one setting they need comes through core's cached
+settings reader, which refills from the database on a cache miss — a
+settings-cache refill at most. They never raise: an unsigned, tampered or
+expired cookie is `:unknown`, and so is an argument that is not a request or
+not a category name.
+
+The banner script keeps the two copies in step. Once per browser session it
+asks the endpoint what the server holds and reports the browser's decision
+again if the server holds none or a different one; a withdrawal the server
+did not hear of is retried on the next page; and a withdrawal in one tab
+empties the others.
+
+A decision lasts `legal_consent_cookie_days` (180 by default), after which the
+visitor is asked again. Taking a consent back reloads the page by default, so
+a script that already ran does not keep running and the page is served under
+the new choice.
+
+The log can also be written directly:
 
 ```elixir
 alias PhoenixKit.Modules.Legal.ConsentLog
 
-# Log consent for a user
 ConsentLog.log_consents(
   %{"analytics" => true, "marketing" => false},
   user_uuid: user.uuid,
-  consent_version: "2026-03-27",
-  ip_address: "192.168.1.1",
-  user_agent: "Mozilla/5.0..."
+  consent_version: "2026-03-27"
 )
 
-# Check current consent status
 ConsentLog.get_consent_status(user_uuid: user.uuid)
-# => %{"analytics" => true, "marketing" => false, "necessary" => true}
+# => %{"analytics" => true, "marketing" => false}
 ```
+
+## What the site collects
+
+A cookie policy that lists `_ga` on a site that has never loaded Google
+Analytics is as wrong as one that leaves out what the site does collect. So
+the list is not written by hand. Any PhoenixKit module that collects something
+exports `data_collection/0`:
+
+```elixir
+def data_collection do
+  [
+    %{
+      key: "web_analytics.measurement",
+      title: "Visit statistics",
+      description: "Counts visits to our pages.",
+      category: "analytics",          # necessary | analytics | marketing | preferences
+      mode: :consent,                 # :always | :consent | :unless_objected | :off
+      active: true,
+      data: ["The pages you view", "Your country"],
+      retention: "365 days",
+      storage: [%{name: "cart", kind: "cookie", duration: "30 days", purpose: "Basket"}]
+    }
+  ]
+end
+```
+
+It is found by name, so the declaring module needs no dependency on this
+package. **Settings → Legal → What this site collects** shows every
+declaration with how it is currently collected. Ticked entries are named under
+the matching toggle of the banner's preferences dialog and written into the
+generated Cookie Policy; unticking one takes it out of both, and the page says
+so beside it when the entry is still being collected. The page also says when
+the list has changed since the Cookie Policy was generated.
+
+An entry whose mode is `:off` is not listed, like one that is not active. A
+module whose `data_collection/0` raises declares nothing, and a warning names
+it in the log.
+
+"Changed" is a fingerprint of what the policy prints about the listed
+entries — key, mode, category, the data list, retention, and each stored
+item's name, kind and duration, but not titles or descriptions — always taken
+in English, so it does not depend on who is looking.
+
+This module declares itself: the `pk_consent` cookie, the consent log, and
+every `localStorage`/`sessionStorage` key the banner script writes.
 
 ## Architecture
 
@@ -399,8 +503,41 @@ Requires either `user_uuid` or `session_id` (at least one must be present).
 | `legal_policy_version` | `"1.0"` | Manual policy version string |
 | `legal_google_consent_mode` | `false` | Enable Google Consent Mode v2 |
 | `legal_hide_for_authenticated` | `true` | Hide widget for logged-in users |
+| `legal_consent_log_enabled` | `true` | Write each decision to the consent log |
+| `legal_consent_log_ip` | `false` | Keep the visitor's IP address with a log entry |
+| `legal_consent_log_user_agent` | `false` | Keep a hash of the User-Agent with a log entry |
+| `legal_consent_cookie_days` | `180` | Days a decision lasts before the visitor is asked again (1–730; the settings page refuses anything else) |
+| `legal_consent_reload_on_withdrawal` | `true` | Reload the page when a visitor takes a consent back |
+| `legal_hidden_collection` | `[]` | Declared entries the operator took out of the banner and the policy |
 
-## API Endpoint
+## API Endpoints
+
+**`/phoenix_kit/api/consent`** — the visitor's decision. This package's own
+route (`PhoenixKit.Modules.Legal.Routes`), spliced in by `phoenix_kit_routes()`.
+
+| Method | Does |
+|---|---|
+| `GET` | Returns the decision the server holds for this browser (`{"decided": false}` without one) |
+| `POST` | Records `{"consent": {"analytics": true, …}, "source": "banner"}`, writes the log and sets the cookie |
+| `DELETE` | Logs every category as refused and removes the cookie, so the visitor is asked again |
+
+It is public — a visitor decides before signing in — and carries no CSRF
+token, since the banner may run on a cached page. A write is accepted only
+from the site itself, takes nothing from the body but booleans for the known
+categories, is not logged twice for the same decision, and is rate-limited
+(20 writes a minute per address, per /64 for IPv6; `POST` and `DELETE`
+share the count). It answers 404 while the module or the banner is off.
+
+"From the site itself" means: an `Origin` whose host **and port** match the
+request's `Host` header, the `x-forwarded-host` a proxy set, or the `site_url`
+setting (default ports dropped; the same host on another port is another
+origin and is refused). When there is no `Origin`, or it is `null` — which a
+browser also sends on a same-origin write under `Referrer-Policy:
+no-referrer` — `Sec-Fetch-Site` decides: `same-origin` and `none` pass,
+`same-site` and `cross-site` do not. A request with neither header is not
+from a browser page and is let through. Behind a proxy that rewrites `Host`
+without forwarding the original, set `site_url`.
+
 
 **`GET /phoenix_kit/api/consent-config`** — Returns widget configuration as JSON.
 
@@ -416,8 +553,8 @@ when this package is absent; when it is installed, that controller delegates to
 `PhoenixKitWeb.Controllers.ConsentConfigController` through 0.1.9 and no longer
 does.
 
-That makes core a hard requirement — hence the `{:phoenix_kit, "~> 1.7.227"}` floor
-in `mix.exs`. Core declares the route whenever this module is loaded, so on an older
+That makes core a hard requirement: 1.7.227 is the first release that owns the
+route, and the `{:phoenix_kit, "~> 2.0"}` pin in `mix.exs` is above it. Core declares the route whenever this module is loaded, so on an older
 core the route resolves to a controller that no longer exists anywhere.
 
 ## Development

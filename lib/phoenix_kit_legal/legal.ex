@@ -53,7 +53,9 @@ defmodule PhoenixKit.Modules.Legal do
             ]}
 
   alias PhoenixKit.Dashboard.Tab
+  alias PhoenixKit.Modules.Legal.Consent
   alias PhoenixKit.Modules.Legal.ConsentLog
+  alias PhoenixKit.Modules.Legal.DataCollection
   alias PhoenixKit.Modules.Legal.LegalFramework
   alias PhoenixKit.Modules.Legal.PageType
   alias PhoenixKit.Modules.Legal.TemplateGenerator
@@ -294,16 +296,16 @@ defmodule PhoenixKit.Modules.Legal do
   ## Returns
   - `{:ok, setting}` on success
   - `{:error, reason}` on failure
+
+  Like every settings writer here, takes `opts` for the settings history:
+  `:actor_uuid` (who made the change) and `:source` (`"settings"` from the
+  admin page).
   """
-  @spec set_frameworks(list(String.t())) :: {:ok, term()} | {:error, term()}
-  def set_frameworks(framework_ids) when is_list(framework_ids) do
+  @spec set_frameworks(list(String.t()), keyword()) :: {:ok, term()} | {:error, term()}
+  def set_frameworks(framework_ids, opts \\ []) when is_list(framework_ids) do
     valid_ids = Enum.filter(framework_ids, &Map.has_key?(@frameworks, &1))
 
-    Settings.update_json_setting_with_module(
-      "legal_frameworks",
-      %{"items" => valid_ids},
-      @module_name
-    )
+    put_setting(:json, "legal_frameworks", %{"items" => valid_ids}, opts)
   end
 
   @default_company_info %{
@@ -341,11 +343,11 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Update company information.
   """
-  @spec update_company_info(map()) :: {:ok, term()} | {:error, term()}
-  def update_company_info(params) when is_map(params) do
+  @spec update_company_info(map(), keyword()) :: {:ok, term()} | {:error, term()}
+  def update_company_info(params, opts \\ []) when is_map(params) do
     current = get_company_info()
     merged = Map.merge(current, stringify_keys(params))
-    Settings.update_json_setting_with_module("legal_company_info", merged, @module_name)
+    put_setting(:json, "legal_company_info", merged, opts)
   end
 
   @doc """
@@ -366,11 +368,11 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Update DPO contact information.
   """
-  @spec update_dpo_contact(map()) :: {:ok, term()} | {:error, term()}
-  def update_dpo_contact(params) when is_map(params) do
+  @spec update_dpo_contact(map(), keyword()) :: {:ok, term()} | {:error, term()}
+  def update_dpo_contact(params, opts \\ []) when is_map(params) do
     current = get_dpo_contact()
     merged = Map.merge(current, stringify_keys(params))
-    Settings.update_json_setting_with_module("legal_dpo_contact", merged, @module_name)
+    put_setting(:json, "legal_dpo_contact", merged, opts)
   end
 
   # ===================================
@@ -378,6 +380,12 @@ defmodule PhoenixKit.Modules.Legal do
   # ===================================
 
   @opt_in_frameworks ~w(gdpr uk_gdpr lgpd pipeda)
+
+  @setting_writers %{
+    string: :update_setting_with_module,
+    boolean: :update_boolean_setting_with_module,
+    json: :update_json_setting_with_module
+  }
 
   @doc """
   Check if consent widget is enabled (Phase 2 feature).
@@ -390,25 +398,17 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Enable consent widget.
   """
-  @spec enable_consent_widget() :: {:ok, term()} | {:error, term()}
-  def enable_consent_widget do
-    Settings.update_boolean_setting_with_module(
-      "legal_consent_widget_enabled",
-      true,
-      @module_name
-    )
+  @spec enable_consent_widget(keyword()) :: {:ok, term()} | {:error, term()}
+  def enable_consent_widget(opts \\ []) do
+    put_setting(:boolean, "legal_consent_widget_enabled", true, opts)
   end
 
   @doc """
   Disable consent widget.
   """
-  @spec disable_consent_widget() :: {:ok, term()} | {:error, term()}
-  def disable_consent_widget do
-    Settings.update_boolean_setting_with_module(
-      "legal_consent_widget_enabled",
-      false,
-      @module_name
-    )
+  @spec disable_consent_widget(keyword()) :: {:ok, term()} | {:error, term()}
+  def disable_consent_widget(opts \\ []) do
+    put_setting(:boolean, "legal_consent_widget_enabled", false, opts)
   end
 
   @doc """
@@ -455,13 +455,15 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Update cookie banner/icon position.
   """
-  @spec update_icon_position(String.t()) :: {:ok, term()} | {:error, term()}
-  def update_icon_position(position)
+  @spec update_icon_position(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def update_icon_position(position, opts \\ [])
+
+  def update_icon_position(position, opts)
       when position in ~w(bottom-left bottom-right top-left top-right) do
-    Settings.update_setting_with_module("legal_cookie_banner_position", position, @module_name)
+    put_setting(:string, "legal_cookie_banner_position", position, opts)
   end
 
-  def update_icon_position(_), do: {:error, :invalid_position}
+  def update_icon_position(_position, _opts), do: {:error, :invalid_position}
 
   @doc """
   Get policy version for consent tracking.
@@ -497,15 +499,15 @@ defmodule PhoenixKit.Modules.Legal do
   - `{:ok, setting}` on success
   - `{:error, :version_too_long}` when the string exceeds the column width
   """
-  @spec update_policy_version(String.t()) :: {:ok, term()} | {:error, term()}
-  def update_policy_version(version) when is_binary(version) do
+  @spec update_policy_version(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def update_policy_version(version, opts \\ []) when is_binary(version) do
     # Code points, not `String.length/1`'s graphemes — that is the unit Postgres
     # counts for `varchar(n)`, and the two differ on combining marks and ZWJ
     # sequences. See the note on `ConsentLog.column_widths/0`.
     if length(String.codepoints(version)) > ConsentLog.column_widths().consent_version do
       {:error, :version_too_long}
     else
-      Settings.update_setting_with_module("legal_policy_version", version, @module_name)
+      put_setting(:string, "legal_policy_version", version, opts)
     end
   end
 
@@ -520,17 +522,17 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Enable Google Consent Mode v2.
   """
-  @spec enable_google_consent_mode() :: {:ok, term()} | {:error, term()}
-  def enable_google_consent_mode do
-    Settings.update_boolean_setting_with_module("legal_google_consent_mode", true, @module_name)
+  @spec enable_google_consent_mode(keyword()) :: {:ok, term()} | {:error, term()}
+  def enable_google_consent_mode(opts \\ []) do
+    put_setting(:boolean, "legal_google_consent_mode", true, opts)
   end
 
   @doc """
   Disable Google Consent Mode v2.
   """
-  @spec disable_google_consent_mode() :: {:ok, term()} | {:error, term()}
-  def disable_google_consent_mode do
-    Settings.update_boolean_setting_with_module("legal_google_consent_mode", false, @module_name)
+  @spec disable_google_consent_mode(keyword()) :: {:ok, term()} | {:error, term()}
+  def disable_google_consent_mode(opts \\ []) do
+    put_setting(:boolean, "legal_google_consent_mode", false, opts)
   end
 
   # ===================================
@@ -561,12 +563,14 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Update consent mode.
   """
-  @spec update_consent_mode(String.t()) :: {:ok, term()} | {:error, term()}
-  def update_consent_mode(mode) when mode in @consent_modes do
-    Settings.update_setting_with_module("legal_consent_mode", mode, @module_name)
+  @spec update_consent_mode(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def update_consent_mode(mode, opts \\ [])
+
+  def update_consent_mode(mode, opts) when mode in @consent_modes do
+    put_setting(:string, "legal_consent_mode", mode, opts)
   end
 
-  def update_consent_mode(_), do: {:error, :invalid_mode}
+  def update_consent_mode(_mode, _opts), do: {:error, :invalid_mode}
 
   @doc """
   Returns true if the cookie consent widget should be hidden for authenticated users.
@@ -585,14 +589,42 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Update hide for authenticated setting.
   """
-  @spec update_hide_for_authenticated(boolean()) :: {:ok, term()} | {:error, term()}
-  def update_hide_for_authenticated(value) when is_boolean(value) do
-    Settings.update_boolean_setting_with_module(
-      "legal_hide_for_authenticated",
-      value,
-      @module_name
-    )
+  @spec update_hide_for_authenticated(boolean(), keyword()) :: {:ok, term()} | {:error, term()}
+  def update_hide_for_authenticated(value, opts \\ []) when is_boolean(value) do
+    put_setting(:boolean, "legal_hide_for_authenticated", value, opts)
   end
+
+  # The one place this module writes a setting: `kind` is `:string`,
+  # `:boolean` or `:json`, and `opts` (`:actor_uuid`, `:source`) reach the
+  # settings history.
+  #
+  # Core takes those options from 2.16 on. On an older core the pin still
+  # admits, the write goes through without them rather than failing.
+  @doc false
+  @spec put_setting(:string | :boolean | :json, String.t(), term(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def put_setting(kind, key, value, opts \\ []) when is_binary(key) and is_list(opts) do
+    writer = settings_writer()
+    function = Map.fetch!(@setting_writers, kind)
+
+    if Code.ensure_loaded?(writer) and function_exported?(writer, function, 4) do
+      apply(writer, function, [key, value, @module_name, opts])
+    else
+      apply(writer, function, [key, value, @module_name])
+    end
+  end
+
+  # A JSON setting read from the setting itself rather than through the
+  # cache, which trails a write — for code about to change what it reads.
+  @doc false
+  @spec fresh_json_setting(String.t(), term()) :: term()
+  def fresh_json_setting(key, default) when is_binary(key),
+    do: settings_writer().get_json_setting(key, default)
+
+  # `PhoenixKit.Settings`, always, outside this package's own tests: they
+  # have no database behind the settings, and name a module that records
+  # what would have been written.
+  defp settings_writer, do: Application.get_env(:phoenix_kit_legal, :settings_writer, Settings)
 
   @doc """
   Get full consent widget configuration for the component.
@@ -639,6 +671,7 @@ defmodule PhoenixKit.Modules.Legal do
       legal_links: legal_links,
       legal_index_url: Routes.path("/legal", locale: :none),
       translations: %{
+        covers: gettext("Covers:"),
         banner_title: gettext("We value your privacy"),
         banner_message:
           gettext("We use cookies to enhance your browsing experience and analyze our traffic."),
@@ -677,6 +710,53 @@ defmodule PhoenixKit.Modules.Legal do
         }
       }
     }
+    |> Map.merge(consent_record_config())
+  end
+
+  @doc """
+  What the banner script needs to report a decision to the server and to
+  say what each category covers — the part of `get_consent_widget_config/0`
+  that reads no legal page, so nothing here queries the database.
+  """
+  @spec consent_record_config() :: %{
+          consent_endpoint: String.t(),
+          cookie_name: String.t(),
+          cookie_days: pos_integer(),
+          reload_on_withdrawal: boolean(),
+          purposes: %{String.t() => [String.t()]}
+        }
+  def consent_record_config do
+    %{
+      consent_endpoint: consent_endpoint(),
+      cookie_name: Consent.cookie_name(),
+      cookie_days: Consent.cookie_days(),
+      reload_on_withdrawal: Consent.reload_on_withdrawal?(),
+      purposes: consent_purposes()
+    }
+  end
+
+  @doc """
+  The path of the consent endpoint (`PhoenixKit.Modules.Legal.Routes`), under
+  PhoenixKit's URL prefix and without a locale: it is an API, not a page.
+  """
+  @spec consent_endpoint() :: String.t()
+  def consent_endpoint, do: Routes.path("/api/consent", locale: :none)
+
+  @doc """
+  What each consent category covers on this site, as the modules declare it:
+  a map of category to the titles of what is collected under it. Shown under
+  each toggle of the preferences dialog.
+  """
+  @spec consent_purposes() :: %{String.t() => [String.t()]}
+  def consent_purposes do
+    DataCollection.by_category()
+    |> Map.new(fn {category, entries} -> {category, Enum.map(entries, & &1.title)} end)
+  rescue
+    _ -> %{}
+  catch
+    # The module registry or the settings cache not answering: the dialog
+    # still opens, it just says nothing about what a category covers.
+    :exit, _ -> %{}
   end
 
   @doc """
@@ -870,6 +950,108 @@ defmodule PhoenixKit.Modules.Legal do
   # dev_docs/reports/2026-08-10-consent-logs-extraction.md.
   def migration_module, do: PhoenixKit.Modules.Legal.Migrations
 
+  @impl PhoenixKit.Module
+  @doc """
+  The consent manager, folded into the host's `phoenix_kit_modules.js`.
+
+  Core's own bundle carries an older copy of this script, which loads first
+  on any host that has not imported this package's file by hand, and which
+  does not report decisions to the server. Shipping the current one through
+  the bundle compiler is what puts it on every host; it retires the older
+  copy when it finds one (see the top of the script).
+  """
+  def js_sources do
+    [
+      %{
+        app: :phoenix_kit_legal,
+        file: "static/assets/phoenix_kit_consent.js",
+        global: "PhoenixKitLegalHooks"
+      }
+    ]
+  end
+
+  @impl PhoenixKit.Module
+  # The consent endpoint only. Legal pages are Publishing's to serve — see
+  # the note on `reserved_route_prefixes/0` below.
+  def route_module, do: PhoenixKit.Modules.Legal.Routes
+
+  @doc """
+  What this module itself puts on a visitor's device and keeps about them —
+  its entry in `PhoenixKit.Modules.Legal.DataCollection`.
+  """
+  @spec data_collection() :: [map()]
+  def data_collection do
+    days = Consent.cookie_days()
+
+    [
+      %{
+        key: "legal.consent",
+        title: gettext("Your privacy choices"),
+        description:
+          gettext(
+            "Remembers what you agreed to and what you refused, so we do not ask on every page and can show that we asked."
+          ),
+        category: "necessary",
+        mode: :always,
+        active: consent_widget_enabled?(),
+        data: consent_record_data(),
+        retention: nil,
+        storage: [
+          %{
+            name: Consent.cookie_name(),
+            kind: "cookie",
+            duration: ngettext("%{count} day", "%{count} days", days, count: days),
+            purpose: gettext("Stores your privacy choices")
+          },
+          %{
+            name: "pk_consent",
+            kind: "localStorage",
+            duration: gettext("Until cleared"),
+            purpose: gettext("Stores your privacy choices for this browser")
+          },
+          %{
+            name: "pk_consent_version",
+            kind: "localStorage",
+            duration: gettext("Until cleared"),
+            purpose:
+              gettext("Remembers which version of our policies you made your choices under")
+          },
+          %{
+            name: "pk_consent_revoke_pending",
+            kind: "localStorage",
+            duration: gettext("Until your withdrawal reaches our server"),
+            purpose: gettext("Makes sure a withdrawn consent is also withdrawn on our server")
+          },
+          %{
+            name: "pk_consent_synced",
+            kind: "sessionStorage",
+            duration: gettext("Until you close the browser"),
+            purpose: gettext("Remembers that your choices were already compared with our server")
+          },
+          # Written only by a browser that has no sessionStorage.
+          %{
+            name: "pk_consent_synced_at",
+            kind: "localStorage",
+            duration: gettext("Until cleared"),
+            purpose: gettext("Remembers that your choices were already compared with our server")
+          }
+        ]
+      }
+    ]
+  end
+
+  defp consent_record_data do
+    [
+      Consent.log_enabled?() &&
+        gettext("The choices you made, when, and under which policy version"),
+      Consent.log_enabled?() && gettext("Your account, when you are signed in"),
+      Consent.log_enabled?() && Consent.log_ip?() && gettext("Your IP address"),
+      Consent.log_enabled?() && Consent.log_user_agent?() &&
+        gettext("A hash of your browser's User-Agent")
+    ]
+    |> Enum.filter(&is_binary/1)
+  end
+
   # NOTE: Legal deliberately does NOT implement
   # `PhoenixKit.Module.reserved_route_prefixes/0`.
   #
@@ -905,6 +1087,9 @@ defmodule PhoenixKit.Modules.Legal do
 
   ## Returns
   - `{:ok, post}` on success
+  - `{:error, {:data_collection, reason}}` when what the site's modules
+    declare could not be gathered — the page is not written from a partial
+    list, and the cookie policy's fingerprint is left as it was
   - `{:error, reason}` on failure
   """
   @spec generate_page(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
@@ -915,8 +1100,10 @@ defmodule PhoenixKit.Modules.Legal do
 
     with {:ok, _} <- ensure_legal_blog(),
          {:ok, page_config} <- get_page_config(page_type),
-         {:ok, content} <- render_template(page_config.template, language) do
-      create_or_update_legal_post(page_config, content, language, scope)
+         {:ok, content} <- render_template(page_config.template, language),
+         {:ok, post} <- create_or_update_legal_post(page_config, content, language, scope) do
+      remember_collection(page_type, scope)
+      {:ok, post}
     end
   end
 
@@ -1212,35 +1399,118 @@ defmodule PhoenixKit.Modules.Legal do
   end
 
   defp render_template(template_name, language) do
-    context = build_template_context()
-    TemplateGenerator.render(template_name, context, language)
+    with {:ok, context} <- build_template_context(language) do
+      TemplateGenerator.render(template_name, context, language)
+    end
   end
 
-  defp build_template_context do
-    company = get_company_info()
-    dpo = get_dpo_contact()
-    frameworks = get_selected_frameworks()
+  # The cookie policy is written from what the modules declare; remembering
+  # that list is what lets the settings page say when the policy has fallen
+  # behind it. A failed write only loses that hint.
+  #
+  # It is a settings write like any other, so it carries who generated the
+  # page; without a scope (a script, a task) nobody is named.
+  @doc false
+  @spec remember_collection(String.t(), map() | nil) :: :ok
+  def remember_collection("cookie-policy", scope) do
+    opts =
+      case actor_uuid(scope) do
+        uuid when is_binary(uuid) -> [actor_uuid: uuid]
+        _ -> []
+      end
 
-    # Format full address from individual fields
-    company_address = format_company_address(company)
+    DataCollection.remember_generated(opts)
+    :ok
+  rescue
+    _ -> :ok
+  end
 
-    # Use site_url from General Settings (consolidated location)
-    website_url = Settings.get_setting("site_url", "")
+  def remember_collection(_page_type, _scope), do: :ok
 
+  defp build_template_context(language) do
+    with {:ok, data_collection} <- template_collection(language) do
+      company = get_company_info()
+      dpo = get_dpo_contact()
+      frameworks = get_selected_frameworks()
+
+      # Format full address from individual fields
+      company_address = format_company_address(company)
+
+      # Use site_url from General Settings (consolidated location)
+      website_url = Settings.get_setting("site_url", "")
+
+      {:ok,
+       %{
+         company_name: company["name"] || "",
+         company_address: company_address,
+         company_country: get_country_name(company["country"]),
+         company_website: website_url,
+         registration_number: company["registration_number"] || "",
+         vat_number: company["vat_number"] || "",
+         dpo_name: dpo["name"] || "",
+         dpo_email: dpo["email"] || "",
+         dpo_phone: dpo["phone"] || "",
+         dpo_address: dpo["address"] || "",
+         frameworks: frameworks,
+         effective_date: Date.utc_today() |> Date.to_string(),
+         data_collection: data_collection
+       }}
+    end
+  end
+
+  # What the policy lists, by consent category, in the page's language. Each
+  # entry gains the words for its legal ground, and every piece of declared
+  # text is made safe for the Markdown it is printed into, so a template
+  # needs no logic.
+  #
+  # A list that cannot be gathered is an error, not an empty list: a policy
+  # generated from nothing would tell visitors the site collects nothing.
+  @doc false
+  @spec template_collection(String.t(), keyword()) ::
+          {:ok, %{String.t() => [map()]}} | {:error, {:data_collection, term()}}
+  def template_collection(language, opts \\ []) do
+    case DataCollection.fetch_declared(language, opts) do
+      {:ok, entries} ->
+        {:ok,
+         entries
+         |> DataCollection.listed()
+         |> Enum.map(&Map.put(&1, :basis, basis_in(language, &1.mode)))
+         |> Enum.map(&markdown_safe/1)
+         |> DataCollection.by_category()}
+
+      {:error, reason} ->
+        {:error, {:data_collection, reason}}
+    end
+  end
+
+  defp basis_in(language, mode) do
+    Gettext.with_locale(PhoenixKit.Modules.Legal.Gettext, language, fn ->
+      DataCollection.basis_label(mode)
+    end)
+  end
+
+  # Declared text is another module's, and it is printed into table rows and
+  # headings: a `|` would start a new cell and a line break would end the
+  # row. A backslash-escaped pipe reads as a plain one anywhere in Markdown.
+  defp markdown_safe(entry) do
     %{
-      company_name: company["name"] || "",
-      company_address: company_address,
-      company_country: get_country_name(company["country"]),
-      company_website: website_url,
-      registration_number: company["registration_number"] || "",
-      vat_number: company["vat_number"] || "",
-      dpo_name: dpo["name"] || "",
-      dpo_email: dpo["email"] || "",
-      dpo_phone: dpo["phone"] || "",
-      dpo_address: dpo["address"] || "",
-      frameworks: frameworks,
-      effective_date: Date.utc_today() |> Date.to_string()
+      entry
+      | title: markdown_text(entry.title),
+        description: markdown_text(entry.description),
+        basis: markdown_text(entry.basis),
+        retention: entry.retention && markdown_text(entry.retention),
+        data: Enum.map(entry.data, &markdown_text/1),
+        storage:
+          Enum.map(entry.storage, fn item ->
+            Map.new(item, fn {field, text} -> {field, markdown_text(text)} end)
+          end)
     }
+  end
+
+  defp markdown_text(text) when is_binary(text) do
+    text
+    |> String.replace(~r/\s*[\r\n]+\s*/, " ")
+    |> String.replace("|", "\\|")
   end
 
   defp format_company_address(company) do

@@ -17,12 +17,15 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
   @compile {:no_warn_undefined,
             [
+              {PhoenixKitWeb.Actor, :opts, 1},
               {PhoenixKit.Modules.Publishing, :enabled?, 0},
               {PhoenixKit.Modules.Publishing, :enabled_language_codes, 0},
               {PhoenixKit.Modules.Publishing, :get_primary_language, 0}
             ]}
 
   alias PhoenixKit.Modules.Legal
+  alias PhoenixKit.Modules.Legal.Consent
+  alias PhoenixKit.Modules.Legal.DataCollection
   alias PhoenixKit.Settings
   alias PhoenixKit.Utils.Routes
 
@@ -76,6 +79,8 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
       |> assign(:enabled_languages, publishing_module_languages())
       |> assign(:selected_generation_language, default_language())
       |> assign(:legal_diagnosis, Legal.diagnose_legal_pages())
+      |> assign_consent_record()
+      |> assign_collection()
 
     {:ok, socket}
   end
@@ -94,7 +99,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
         [framework_id | current]
       end
 
-    case Legal.set_frameworks(updated) do
+    case Legal.set_frameworks(updated, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply, assign(socket, :selected_frameworks, updated)}
 
@@ -108,7 +113,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     from_email = socket.assigns.from_email
     dpo_contact = Map.put(socket.assigns.dpo_contact, "email", from_email)
 
-    case Legal.update_dpo_contact(dpo_contact) do
+    case Legal.update_dpo_contact(dpo_contact, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -125,7 +130,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     company_address = socket.assigns.company_address_formatted
     dpo_contact = Map.put(socket.assigns.dpo_contact, "address", company_address)
 
-    case Legal.update_dpo_contact(dpo_contact) do
+    case Legal.update_dpo_contact(dpo_contact, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -146,7 +151,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
       "address" => params["dpo_address"] || ""
     }
 
-    case Legal.update_dpo_contact(dpo_contact) do
+    case Legal.update_dpo_contact(dpo_contact, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -173,6 +178,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
          |> assign(:generating, false)
          |> assign(:generated_pages, Legal.list_generated_pages())
          |> assign(:unpublished_pages, Legal.get_unpublished_required_pages())
+         |> assign_collection()
          |> put_flash(:info, gettext("Page generated successfully"))}
 
       {:error, reason} ->
@@ -226,6 +232,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
      |> assign(:generating, false)
      |> assign(:generated_pages, Legal.list_generated_pages())
      |> assign(:unpublished_pages, Legal.get_unpublished_required_pages())
+     |> assign_collection()
      |> put_flash(:info, gettext("Generated %{count} pages", count: success_count))}
   end
 
@@ -265,19 +272,20 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   @impl true
   def handle_event("toggle_consent_widget", _params, socket) do
     if socket.assigns.consent_widget_enabled do
-      case Legal.disable_consent_widget() do
+      case Legal.disable_consent_widget(actor_opts(socket)) do
         {:ok, _} ->
           {:noreply,
            socket
            |> assign(:consent_widget_enabled, false)
            |> assign(:show_consent_icon, false)
+           |> assign_collection()
            |> put_flash(:info, gettext("Cookie consent widget disabled"))}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
       end
     else
-      case Legal.enable_consent_widget() do
+      case Legal.enable_consent_widget(actor_opts(socket)) do
         {:ok, _} ->
           show_icon = Legal.has_opt_in_framework?()
 
@@ -285,6 +293,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
            socket
            |> assign(:consent_widget_enabled, true)
            |> assign(:show_consent_icon, show_icon)
+           |> assign_collection()
            |> put_flash(:info, gettext("Cookie consent widget enabled"))}
 
         {:error, _} ->
@@ -298,10 +307,16 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     consent_mode = params["consent_mode"] || "strict"
     hide_for_auth = params["hide_for_authenticated"] == "true"
 
-    with {:ok, _} <- Legal.update_consent_mode(consent_mode),
-         {:ok, _} <- Legal.update_hide_for_authenticated(hide_for_auth),
-         {:ok, _} <- Legal.update_icon_position(params["icon_position"] || "bottom-right"),
-         {:ok, _} <- update_google_consent_mode(params["google_consent_mode"]) do
+    actor = actor_opts(socket)
+
+    # The record's settings go first: they are the only ones checked before
+    # anything is written, so a refused number of days leaves all as it was.
+    with :ok <- Consent.update_settings(consent_record_params(params), actor),
+         {:ok, _} <- Legal.update_consent_mode(consent_mode, actor),
+         {:ok, _} <- Legal.update_hide_for_authenticated(hide_for_auth, actor),
+         {:ok, _} <-
+           Legal.update_icon_position(params["icon_position"] || "bottom-right", actor),
+         {:ok, _} <- update_google_consent_mode(params["google_consent_mode"], actor) do
       # Recalculate show_icon based on new settings
       show_icon = Legal.should_show_consent_icon?()
 
@@ -312,15 +327,126 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
        |> assign(:icon_position, params["icon_position"] || "bottom-right")
        |> assign(:google_consent_mode, params["google_consent_mode"] == "true")
        |> assign(:show_consent_icon, show_icon)
+       |> assign_consent_record(consent_record_params(params))
+       |> assign_collection()
        |> put_flash(:info, gettext("Consent widget settings saved"))}
     else
+      {:error, :invalid_days} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Enter a whole number of days from 1 to %{max}. Nothing was saved.",
+             max: Consent.day_bounds().max
+           )
+         )}
+
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Failed to save settings"))}
     end
   end
 
-  defp update_google_consent_mode("true"), do: Legal.enable_google_consent_mode()
-  defp update_google_consent_mode(_), do: Legal.disable_google_consent_mode()
+  # ===================================
+  # WHAT THE SITE COLLECTS
+  # ===================================
+
+  @impl true
+  def handle_event("toggle_collection", %{"key" => key}, socket) do
+    result =
+      if key in socket.assigns.hidden_collection,
+        do: DataCollection.show(key, actor_opts(socket)),
+        else: DataCollection.hide(key, actor_opts(socket))
+
+    case result do
+      {:ok, hidden} ->
+        {:noreply, assign_collection(socket, hidden)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
+    end
+  end
+
+  defp assign_consent_record(socket) do
+    assign(socket, :consent_record, %{
+      log: Consent.log_enabled?(),
+      log_ip: Consent.log_ip?(),
+      log_user_agent: Consent.log_user_agent?(),
+      reload_on_withdrawal: Consent.reload_on_withdrawal?(),
+      cookie_days: Consent.cookie_days(),
+      max_days: Consent.day_bounds().max
+    })
+  end
+
+  # After a save: what was just saved, rather than a read through a cache
+  # that has not caught up with the write yet.
+  defp assign_consent_record(socket, saved) do
+    assign(socket, :consent_record, %{
+      log: saved.log,
+      log_ip: saved.log_ip,
+      log_user_agent: saved.log_user_agent,
+      reload_on_withdrawal: saved.reload_on_withdrawal,
+      cookie_days: saved.cookie_days |> to_string() |> String.trim() |> String.to_integer(),
+      max_days: Consent.day_bounds().max
+    })
+  end
+
+  # `hidden` is passed by whoever has just changed it; otherwise it is read
+  # from the setting itself, not through the cache, which trails a write.
+  defp assign_collection(socket, hidden \\ DataCollection.hidden_keys(fresh: true)) do
+    widget? = socket.assigns[:consent_widget_enabled] == true
+
+    entries =
+      Enum.map(DataCollection.declared(), fn entry ->
+        Map.put(
+          entry,
+          :warnings,
+          DataCollection.warnings(entry, hidden: hidden, widget_enabled: widget?)
+        )
+      end)
+
+    socket
+    |> assign(:collection, entries)
+    |> assign(:hidden_collection, hidden)
+    |> assign(:policy_outdated, DataCollection.policy_outdated?())
+  end
+
+  defp consent_record_params(params) do
+    %{
+      log: params["consent_log"] == "true",
+      log_ip: params["consent_log_ip"] == "true",
+      log_user_agent: params["consent_log_user_agent"] == "true",
+      reload_on_withdrawal: params["consent_reload_on_withdrawal"] == "true",
+      cookie_days: params["consent_cookie_days"]
+    }
+  end
+
+  defp category_label("necessary"), do: gettext("Essential")
+  defp category_label("analytics"), do: gettext("Analytics")
+  defp category_label("marketing"), do: gettext("Marketing")
+  defp category_label("preferences"), do: gettext("Preferences")
+  defp category_label(other), do: other
+
+  defp update_google_consent_mode("true", actor), do: Legal.enable_google_consent_mode(actor)
+  defp update_google_consent_mode(_, actor), do: Legal.disable_google_consent_mode(actor)
+
+  # Who is changing a setting, for the settings history: every write on this
+  # page carries it. Core's `PhoenixKitWeb.Actor` is the one place that knows
+  # how to read the acting user off a socket; it arrived in 2.38, so on an
+  # older core the scope is read here instead.
+  defp actor_opts(socket) do
+    actor =
+      if Code.ensure_loaded?(PhoenixKitWeb.Actor) and
+           function_exported?(PhoenixKitWeb.Actor, :opts, 1) do
+        PhoenixKitWeb.Actor.opts(socket)
+      else
+        case socket.assigns[:phoenix_kit_current_scope] do
+          %{user: %{uuid: uuid}} when is_binary(uuid) -> [actor_uuid: uuid]
+          _ -> []
+        end
+      end
+
+    Keyword.put(actor, :source, "settings")
+  end
 
   defp publishing_module_languages do
     mod = PhoenixKit.Modules.Publishing

@@ -16,18 +16,23 @@ Legal generates content; Publishing renders it.
   call sites still go through `publishing_enabled?/0`, which rescues, and a
   `@compile {:no_warn_undefined, …}` list). Also `phoenix_live_view ~> 1.0`,
   `ecto_sql ~> 3.10`, `gettext ~> 1.0`.
-- **Consumed by:** no sibling module. Core reaches into it behind
+- **Consumed by:** any module that collects data server-side may ask
+  `Legal.Consent.status/2` (behind `Code.ensure_loaded?/1` — `phoenix_kit_web_analytics`
+  does). Core reaches into it behind
   `Code.ensure_loaded?(PhoenixKit.Modules.Legal)` from three places: the
   consent-config controller, `AssetsController` (serves this package's
   `phoenix_kit_consent.js`), and `LayoutWrapper` (renders the widget).
 - **Admin surface:** one settings subtab, `Settings → Legal`, at
   `{prefix}/admin/settings/legal` (tab id `:admin_settings_legal`, parent
   `:admin_settings`, permission `"legal"`). No public pages of its own.
+- **Public surface:** one JSON endpoint, `{prefix}/api/consent`
+  (`Legal.Routes` → `Legal.Web.ConsentController`).
 - **Module key** `"legal"`; settings prefix `legal_`.
 
 ## What this module does NOT do
 
-- **No public LiveView, controller or template.** Generated pages are Publishing
+- **No public page: no LiveView, page controller or template.** (The one
+  controller is the consent endpoint's, JSON only.) Generated pages are Publishing
   posts in the group slugged `"legal"`; Publishing's `/:language/:group/*path`
   catch-all serves them at `/legal` and `/legal/:slug`, with languages,
   translations, canonical/`og:*`/hreflang, editing and the version dropdown.
@@ -49,7 +54,7 @@ Legal generates content; Publishing renders it.
 
 ```bash
 mix deps.get
-mix test                     # no database needed; this suite has no Repo and no :integration tag
+mix test                     # pure tests always; :integration ones need the phoenix_kit_legal_test database
 mix precommit                # compile --warnings-as-errors + format + credo --strict + dialyzer; run before every commit
 ```
 
@@ -75,9 +80,11 @@ breaks consumers, never this repo).
   `Legal.Paths` module. Public legal URLs pass `locale: :none` — Publishing owns
   the language prefix.
 - **Routing:** this module registers a settings tab carrying
-  `live_view: {PhoenixKitWeb.Live.Modules.Legal.Settings, :index}`. It defines no
-  `route_module/0`, no `admin_routes/0`, no `admin_locale_routes/0`, and no
-  reserved route prefix. Never hand-register its routes in a host router.
+  `live_view: {PhoenixKitWeb.Live.Modules.Legal.Settings, :index}`. Its
+  `route_module/0` (`Legal.Routes`) exports `generate/1` only — the consent
+  endpoint, piped through `:phoenix_kit_api`. It defines no `admin_routes/0`,
+  no `admin_locale_routes/0`, and no reserved route prefix. Never
+  hand-register its routes in a host router.
 - **LiveView:** `use PhoenixKitWeb, :live_view` (not `use Phoenix.LiveView`),
   followed by `use Gettext, backend: PhoenixKit.Modules.Legal.Gettext` — that
   ordering matters, the second `use` must win. The settings template wraps its
@@ -90,21 +97,40 @@ breaks consumers, never this repo).
   tab labels passed to `Tab.new!(label: …)`, page titles in `@page_types` — are
   seeded by the noop anchor `Legal.__extract_strings__/0`; add new ones there
   before re-extracting, and review every `#, fuzzy` the merge produces.
-- **JS:** no `js_sources/0` and no LiveView hooks. `priv/static/assets/phoenix_kit_consent.js`
-  is a standalone browser script (banner, preferences modal, localStorage,
-  cross-tab sync, Google Consent Mode v2 events) reaching pages two ways: core's
-  admin layout emits `<script defer src={Routes.path("/assets/phoenix_kit_consent.js")}>`
-  and core's `AssetsController` serves the file out of this package's `priv`; on
-  host public pages `mix phoenix_kit_legal.install` adds `Plug.Static` at
-  `/phoenix_kit_legal` and an import in `assets/js/app.js`. If a real LiveView
-  hook is ever needed it ships through `js_sources/0`, never an inline
-  `<script>` — morphdom does not execute inserted script tags, so an inline hook
-  vanishes on LiveView navigation.
+- **JS:** `priv/static/assets/phoenix_kit_consent.js` is a standalone browser
+  script (banner, preferences modal, localStorage, cross-tab sync, Google
+  Consent Mode v2 events, reporting each decision to the consent endpoint, and
+  the `CookieConsent` LiveView hook). It reaches pages three ways: through
+  `js_sources/0` (core's bundle compiler folds it into every host's
+  `phoenix_kit_modules.js`); core's own layouts emit
+  `<script defer src={Routes.path("/assets/phoenix_kit_consent.js")}>`, served
+  by core's `AssetsController` out of this package's `priv`; and
+  `mix phoenix_kit_legal.install` adds `Plug.Static` at `/phoenix_kit_legal`
+  and an import in `assets/js/app.js`. Loading it twice is harmless (it
+  returns on finding itself). Never an inline `<script>` — morphdom does not
+  execute inserted script tags, so an inline hook vanishes on LiveView
+  navigation.
+- ⚠️ **Core's `phoenix_kit.js` bundles an older copy of the consent manager**
+  that loads first and does not report decisions. This script retires it
+  (top of the file: marks it initialized, sets
+  `PHOENIX_KIT_CONSENT_AVAILABLE = false`, rewrites its hook callbacks in
+  place) and, having retired it, injects the widget itself on pages with no
+  server-rendered `#pk-consent-root`. Keep that takeover until core drops its
+  copy; a change to the banner made only here is invisible on most hosts
+  without it. `LiveViewTest` runs no browser JS — verify banner changes in a
+  browser, on a host page that has no component in its layout.
 - **`enabled?/0`** must survive a missing database and return `false`. It reads
   `Settings.get_boolean_setting("legal_enabled", false)`, whose rescue in core
   supplies that; do not replace it with a bare Repo call.
-- **Activity/audit threading:** settings writes go through
-  `Settings.update_setting_with_module(key, value, "legal")`. Page publishing
+- **Activity/audit threading:** every settings write goes through
+  `Legal.put_setting/4`, and every writer takes `opts \\ []` and passes them
+  on: `:actor_uuid` and `:source` are what core's settings history records.
+  The settings LiveView builds them in `actor_opts/1` (core's
+  `PhoenixKitWeb.Actor` when it is there, plus `source: "settings"`) — a new
+  write on that page must carry it. `put_setting/4` feature-detects the
+  4-arity core writers (core ≥ 2.16) and resolves the writer module from
+  `config :phoenix_kit_legal, :settings_writer`, which only this package's
+  tests set (`Test.SettingsRecorder`). Page publishing
   passes `actor_uuid:` — `publish_version/4` audits by that key and ignores the
   `:scope` that `update_post/4` accepts, so a scope passed straight through is
   silently dropped from the audit trail.
@@ -119,6 +145,48 @@ breaks consumers, never this repo).
 - **`css_sources/0`** returns the absolute `@source_root` **only** when the
   `:phoenix_kit_legal` atom entry does not already cover it. Do not simplify it
   back to `[:phoenix_kit_legal, @source_root]`.
+- **The server's copy of a decision is the signed `pk_consent` cookie**
+  (`Legal.Consent`). `localStorage` is the browser's copy and is never
+  trusted by the server. `Consent.read/1`, `status/2` and `objected?/1` are
+  called on other modules' hot paths: they must make no database query of
+  their own (settings through the **cached** readers only, which refill from
+  the database on a cache miss — a settings-cache refill at most) and must
+  never raise, whatever they are handed. Policy staleness is the banner's
+  job, not theirs — deriving the current version costs a Publishing query.
+  The payload is `id`, `v`, `c`, `s`, `t` and `u` (the log entry names a
+  user); a cookie without `u` must keep decoding. The log line for a failed
+  write goes through `Consent.describe_failure/1` — never `inspect` a
+  changeset or print an exception's message there, both hold the visitor's
+  address.
+- **The banner script reconciles with the server, not with the cookie.** A
+  `pk_consent` cookie can exist and mean nothing to the server (a rotated
+  `secret_key_base`, another app on the host), so on load the script `GET`s
+  the endpoint and re-POSTs the local decision when the server holds none or
+  another — once per browser session (`sessionStorage`, or a 24-hour
+  `localStorage` timestamp). Without that cap a browser that refuses the
+  cookie writes three audit rows on every page.
+- **Consent endpoint trust boundary** lives in `ConsentController`: same
+  origin only, booleans for known categories only, server-chosen
+  version/ID/time, no second log row for an unchanged decision (one more,
+  with the user, when a signed-out decision returns signed in), a rate limit
+  per address (per /64 for IPv6). It is public and CSRF-less on purpose; do
+  not move it into `:browser`. Same origin means the `Origin`'s host **and
+  port** against the `Host` header, `x-forwarded-host` or `site_url` — never
+  `conn.port`, and never the hostname alone (cookies ignore ports, origins do
+  not). `Origin: null` is not a refusal; it falls through to
+  `Sec-Fetch-Site`.
+- **What the site collects is declared, not written** (`Legal.DataCollection`):
+  modules export `data_collection/0`, found by name — never add a behaviour
+  callback or a dependency for it. A declaration that raises or is malformed
+  is dropped, never fatal (a raise is logged with the module's name). This
+  module's own entry is `Legal.data_collection/0`; a new cookie, storage key
+  or logged field goes there, and a test compares it with the `*_KEY`
+  constants of the banner script. Declarations in a given language come from
+  `fetch_declared/2`, which evaluates them in a fresh process: a
+  backend-specific Gettext locale (core sets one) beats `Gettext.put_locale/1`,
+  so changing the caller's locale is not enough. A list that cannot be
+  gathered is an error (`generate_page/2` → `{:error, {:data_collection, _}}`),
+  never an empty policy. The policy fingerprint is always taken in English.
 - **Consent vocabulary:** types are `"necessary"` (always on), `"analytics"`,
   `"marketing"`, `"preferences"`; modes are `"strict"` (opt-in, the default for
   GDPR) and `"notice"` (opt-out/informational).
@@ -170,6 +238,9 @@ lib/
 ├── mix/tasks/phoenix_kit_legal.install.ex # host patcher (endpoint, app.css, app.js)
 └── phoenix_kit_legal/
     ├── legal.ex                          # PhoenixKit.Module facade
+    ├── consent.ex                        # the server's copy of a decision: cookie + log
+    ├── data_collection.ex                # what modules declare they collect
+    ├── routes.ex                         # route module: the consent endpoint
     ├── legal_framework.ex                # LegalFramework struct
     ├── page_type.ex                      # PageType struct
     ├── gettext.ex                        # module Gettext backend
@@ -178,6 +249,7 @@ lib/
     ├── services/template_generator.ex    # EEx rendering
     └── web/
         ├── cookie_consent.ex             # Phoenix.Component (widget)
+        ├── consent_controller.ex         # GET/POST/DELETE {prefix}/api/consent
         └── settings.ex + settings.html.heex  # admin LiveView
 priv/
 ├── gettext/                              # default.pot + de, en, et, fr, ru
@@ -195,6 +267,11 @@ Key modules:
   `up_statements/1` / `down_statements/2` builders).
 - **`Legal.ConsentLog`** — Ecto schema plus `column_widths/0`, `changeset/2`,
   `create/1`, `log_consents/2`.
+- **`Legal.Consent`** — the signed cookie (`read/1`, `status/2`,
+  `objected?/1`), `record/3` and `forget/2`, and the record's settings.
+- **`Legal.DataCollection`** — `declared/0`, `fetch_declared/2` (in a given
+  language), `listed/1`, `by_category/1`, the operator's hidden keys,
+  per-entry warnings, the policy fingerprint.
 - **`Legal.TemplateGenerator`** — EEx rendering with parent-app overrides.
 - **`Legal.CookieConsent`** — the glass-morphic widget component.
 - **`PhoenixKitWeb.Live.Modules.Legal.Settings`** — the admin LiveView.
@@ -207,12 +284,12 @@ legal pages live in Publishing's tables.
 | Column | Notes |
 |---|---|
 | `uuid` | UUIDv7 primary key |
-| `user_uuid`, `session_id` | identity — at least one is required |
+| `user_uuid`, `session_id` | identity — at least one is required. The endpoint writes its random consent ID as `session_id` |
 | `consent_type` | `necessary` \| `analytics` \| `marketing` \| `preferences` |
 | `consent_given` | boolean, default `false` |
 | `consent_version` | policy version at the time of consent |
-| `ip_address`, `user_agent_hash` | compliance metadata (SHA256 hash) |
-| `metadata` | JSONB, extensible |
+| `ip_address`, `user_agent_hash` | compliance metadata (SHA256 hash); written by the endpoint only when their settings are on |
+| `metadata` | JSONB, extensible. The endpoint writes `source` and `gpc` |
 
 `varchar` widths (`session_id` 64, `consent_type` 30, `consent_version` 20,
 `ip_address` 45, `user_agent_hash` 64) are declared once in
@@ -236,6 +313,12 @@ the outer transaction and `{:error, errors}` surfaces there instead.
 | `legal_policy_version` | manual version string (default `"1.0"`) |
 | `legal_google_consent_mode` | Google Consent Mode v2 on/off |
 | `legal_hide_for_authenticated` | hide the widget for logged-in users |
+| `legal_consent_log_enabled` | write each decision to the consent log (default on) |
+| `legal_consent_log_ip`, `legal_consent_log_user_agent` | keep the address / a User-Agent hash with a log entry (default off) |
+| `legal_consent_cookie_days` | days a decision lasts (default 180). A write outside 1..730 is refused (`{:error, :invalid_days}`); a stored value out of range is clamped on read |
+| `legal_consent_reload_on_withdrawal` | reload the page when a consent is taken back (default on) |
+| `legal_hidden_collection` | JSON `{"items": [keys]}` — declared entries the operator hid |
+| `legal_policy_collection_fingerprint` | what the Cookie Policy was last generated from: a hash of the listed entries' key, mode, category, data, retention and stored items (name, kind, duration), taken in English |
 
 ### Compliance frameworks
 
@@ -261,7 +344,9 @@ Templates live in `priv/legal_templates/`, resolved in this order:
 Every template receives `@company_name`, `@company_address`, `@company_country`,
 `@company_website`, `@registration_number`, `@vat_number`, `@dpo_name`,
 `@dpo_email`, `@dpo_phone`, `@dpo_address`, `@frameworks`, `@effective_date`,
-`@language`.
+`@language`, `@data_collection` (the listed declarations by consent category,
+each with its `basis` in words; text already escaped for Markdown tables;
+defaults to four empty categories when a caller's context leaves it out).
 
 ### Public route contract
 
@@ -376,7 +461,10 @@ The bulk of `mix test` needs **no database**: no `DataCase`, nothing but pure
 functions, rendered components and source text. Consequently most of the
 migration chain is still verified by parsing `up_statements/1` and
 `down_statements/2` and by reading `lib/phoenix_kit_legal/migrations.ex` as
-text — never by running it. The exception is
+text — never by running it. `test/phoenix_kit_legal/consent_log_write_test.exs`
+(`:integration`) shows a decision reaching the table: it writes to a
+session-local `CREATE TEMP TABLE` shadow inside a rolled-back transaction, so
+it too touches no shared schema. The other exception is
 `test/phoenix_kit_legal/migrations/adoption_integration_test.exs`
 (`@moduletag :integration`), which runs `Migrations.up/1`/`down/1` for real
 through a live `Ecto.Migrator` context against `PhoenixKit.Modules.Legal.Test.Repo`

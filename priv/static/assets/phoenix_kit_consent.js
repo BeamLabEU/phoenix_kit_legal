@@ -7,15 +7,33 @@
  * - Google Consent Mode v2 integration
  * - Script blocking by category
  * - Phoenix LiveView hook integration
+ * - A server-side record of each decision (signed cookie + audit log)
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @license MIT
  */
 (function() {
   "use strict";
 
-  // Prevent double initialization
-  if (window.PhoenixKitConsent) return;
+  // Prevent double initialization — of this script. PhoenixKit's own bundle
+  // (`phoenix_kit.js`) carries an older copy of this manager that loads first
+  // on most hosts and knows nothing about the server's record; left in charge,
+  // no decision would ever be reported. So an older copy is retired rather
+  // than deferred to: it is marked initialized (its hook and its config fetch
+  // both check that flag and do nothing), and its hook object — the one the
+  // host's LiveSocket may already hold — is given this script's callbacks
+  // further down.
+  var previous = window.PhoenixKitConsent;
+  if (previous && previous.reportsDecisions) return;
+  if (previous) {
+    previous.initialized = true;
+    // The older copy injects the widget itself on DOMContentLoaded when the
+    // page has none, unless this flag says the Legal module is absent. This
+    // script does that job instead (see `autoInit`), so the older copy is
+    // told to stand down. If it has already started, both inject and this
+    // one still answers the buttons — untidy, never wrong.
+    window.PHOENIX_KIT_CONSENT_AVAILABLE = false;
+  }
 
   // =====================================================
   // CONSTANTS
@@ -23,6 +41,10 @@
 
   const STORAGE_KEY = "pk_consent";
   const VERSION_KEY = "pk_consent_version";
+  const REVOKE_PENDING_KEY = "pk_consent_revoke_pending";
+  // sessionStorage; SYNCED_AT_KEY is its localStorage stand-in.
+  const SYNCED_KEY = "pk_consent_synced";
+  const SYNCED_AT_KEY = "pk_consent_synced_at";
   const CATEGORIES = ["necessary", "analytics", "marketing", "preferences"];
 
   // Get PhoenixKit URL prefix from global variable set by PhoenixKit
@@ -35,12 +57,16 @@
     return prefix + "/api/consent-config";
   }
   const OPT_IN_FRAMEWORKS = ["gdpr", "uk_gdpr", "lgpd", "pipeda"];
+  const DEFAULT_COOKIE_NAME = "pk_consent";
+  const DEFAULT_COOKIE_DAYS = 180;
 
   // =====================================================
   // MODULE STATE
   // =====================================================
 
   var PhoenixKitConsent = {
+    // Marks a copy that reports each decision to the consent endpoint.
+    reportsDecisions: true,
     initialized: false,
     config: {
       frameworks: [],
@@ -49,7 +75,11 @@
       iconPosition: "bottom-right",
       showIcon: false,
       cookiePolicyUrl: "/legal/cookie-policy",
-      privacyPolicyUrl: "/legal/privacy-policy"
+      privacyPolicyUrl: "/legal/privacy-policy",
+      consentEndpoint: null,
+      cookieName: DEFAULT_COOKIE_NAME,
+      cookieDays: DEFAULT_COOKIE_DAYS,
+      reloadOnWithdrawal: true
     },
     consent: null,
     elements: {
@@ -147,6 +177,7 @@
 
   function shouldShowBanner() {
     var stored = loadConsent();
+    if (isExpired(stored)) stored = null;
     var storedVersion = getStoredVersion();
     var currentVersion = PhoenixKitConsent.config.policyVersion;
     var consentMode = PhoenixKitConsent.config.consentMode;
@@ -164,21 +195,402 @@
   }
 
   // =====================================================
+  // SERVER RECORD
+  // =====================================================
+  //
+  // localStorage is this browser's copy of the decision. The server cannot
+  // read it, so each decision is also reported to the consent endpoint, which
+  // writes the audit record and answers with a signed first-party cookie —
+  // the copy server-side collection obeys.
+
+  // Whether this browser has already compared its decision with the
+  // server's in this session. sessionStorage when there is one; otherwise a
+  // timestamp in localStorage, good for a day.
+  function reconciledAlready() {
+    try {
+      if (window.sessionStorage) return sessionStorage.getItem(SYNCED_KEY) === "1";
+    } catch (e) {
+      // Fall through to localStorage.
+    }
+    try {
+      var at = parseInt(localStorage.getItem(SYNCED_AT_KEY), 10);
+      return !isNaN(at) && Date.now() - at < 86400000;
+    } catch (e) {
+      // Nowhere to remember it: say it was done, rather than repeat it on
+      // every page.
+      return true;
+    }
+  }
+
+  function setReconciled(done) {
+    try {
+      if (window.sessionStorage) {
+        if (done) {
+          sessionStorage.setItem(SYNCED_KEY, "1");
+        } else {
+          sessionStorage.removeItem(SYNCED_KEY);
+        }
+        return;
+      }
+    } catch (e) {
+      // Fall through to localStorage.
+    }
+    try {
+      if (done) {
+        localStorage.setItem(SYNCED_AT_KEY, String(Date.now()));
+      } else {
+        localStorage.removeItem(SYNCED_AT_KEY);
+      }
+    } catch (e) {
+      log("Could not remember the reconciliation", e);
+    }
+  }
+
+  function sameCategories(server, consent) {
+    if (!server || typeof server !== "object") return false;
+    for (var i = 0; i < CATEGORIES.length; i++) {
+      var category = CATEGORIES[i];
+      if (category !== "necessary" && !!server[category] !== !!consent[category]) return false;
+    }
+    return true;
+  }
+
+  // What the server holds for this browser: resolves to
+  // `{ status: <HTTP status>, body: <the JSON, when the status is 200> }`,
+  // rejects when the server could not be reached.
+  function fetchServerConsent() {
+    return fetch(PhoenixKitConsent.config.consentEndpoint, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { "accept": "application/json" }
+    }).then(function(response) {
+      if (!response.ok) return { status: response.status, body: null };
+      return response.json().then(function(body) {
+        return { status: response.status, body: body };
+      });
+    });
+  }
+
+  // When a local decision was made, in the server's unit (unix seconds);
+  // 0 when it does not say.
+  function decidedAt(consent) {
+    var at = consent && consent.timestamp ? Date.parse(consent.timestamp) : NaN;
+    return isNaN(at) ? 0 : Math.floor(at / 1000);
+  }
+
+  // The server's decision in the shape this script keeps its own.
+  function fromServer(server) {
+    var categories = server.consent || {};
+    return {
+      necessary: true,
+      analytics: !!categories.analytics,
+      marketing: !!categories.marketing,
+      preferences: !!categories.preferences,
+      timestamp: new Date(server.decided_at * 1000).toISOString()
+    };
+  }
+
+  // Takes the server's decision as this browser's: it was made after the
+  // one kept here — on another port or scheme of this host, which shares the
+  // cookie but not localStorage, or by the site through the endpoint.
+  function adoptServerConsent(server) {
+    var before = PhoenixKitConsent.consent;
+    var consent = fromServer(server);
+
+    PhoenixKitConsent.consent = consent;
+    saveConsent(consent);
+    applyConsent(consent);
+    updateUI();
+    log("Adopted the server's newer decision", consent);
+
+    // As when the visitor takes a consent back here: what already ran on
+    // this page ran under the old choice.
+    if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, consent)) {
+      window.location.reload();
+    }
+  }
+
+  // Asks the server what it holds for this browser and settles any
+  // difference — the newer copy wins, in either direction.
+  //
+  //   * The server holds nothing, or a decision for another policy version:
+  //     it is handed this browser's (made before the server kept any, or a
+  //     report — a re-consent to a new policy, say — that never arrived).
+  //   * The same version, other choices: whichever was made later stands.
+  //     A withdrawal whose report failed is sent again, where it would
+  //     otherwise leave the old cookie answering "granted" for months; a
+  //     decision the server took later is adopted here instead of being
+  //     overwritten with the stale local one.
+  //
+  // The server is asked, rather than the cookie looked at, because a cookie
+  // can be there and mean nothing to the server: signed with a key since
+  // rotated, or set by another application on the same host.
+  //
+  // Once per session — unless it could not be done (the server did not
+  // answer, or did not take the report), in which case the next page tries
+  // again. A browser that refuses the cookie would otherwise report on
+  // every page, and the server, seeing no cookie, would log each report as
+  // a new visitor's decision.
+  function reconcileWithServer(consent) {
+    var endpoint = PhoenixKitConsent.config.consentEndpoint;
+    if (!endpoint || typeof fetch !== "function") return;
+    if (reconciledAlready()) return;
+    setReconciled(true);
+
+    function handOver() {
+      return reportConsent(consent, "sync").then(function(recorded) {
+        if (!recorded) setReconciled(false);
+      });
+    }
+
+    fetchServerConsent().then(function(answer) {
+      if (answer.status !== 200) throw new Error("Consent endpoint returned " + answer.status);
+      var server = answer.body || {};
+
+      if (!server.decided || server.version !== PhoenixKitConsent.config.policyVersion) {
+        return handOver();
+      }
+      if (sameCategories(server.consent, consent)) return;
+      if (server.decided_at > decidedAt(consent)) return adoptServerConsent(server);
+      return handOver();
+    }).catch(function(err) {
+      setReconciled(false);
+      log("Could not compare consent with the server", err);
+    });
+  }
+
+  // When the revocation still waiting to be delivered was made (unix
+  // milliseconds), or null when none is waiting.
+  function revokePendingSince() {
+    try {
+      var value = localStorage.getItem(REVOKE_PENDING_KEY);
+      if (value === null) return null;
+      var at = parseInt(value, 10);
+      // A flag with no usable time in it is taken as made just now, so that
+      // it is delivered rather than dropped.
+      return isNaN(at) || at < 1000000000000 ? Date.now() : at;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setRevokePending(pending) {
+    try {
+      if (pending) {
+        localStorage.setItem(REVOKE_PENDING_KEY, String(Date.now()));
+      } else {
+        localStorage.removeItem(REVOKE_PENDING_KEY);
+      }
+    } catch (e) {
+      log("Could not update the pending revocation", e);
+    }
+  }
+
+  // The DELETE that takes the server's copy back. The flag is set before it
+  // — with the time, so a later page can tell what the revocation covers —
+  // and cleared only when the server answers, so a request that never
+  // arrived (offline, a closed tab) is sent again on the next page.
+  function revokeOnServer() {
+    setRevokePending(true);
+    return deliverRevoke();
+  }
+
+  function deliverRevoke() {
+    return forgetServerConsent().then(function(forgotten) {
+      if (forgotten) setRevokePending(false);
+      return forgotten;
+    });
+  }
+
+  // A revocation left over from an earlier page. It takes back what the
+  // server held when it was made, and nothing since: a decision the server
+  // recorded later (in another tab, on another port of this host) is not
+  // this revocation's to delete, so the server is asked first.
+  function retryRevoke(since) {
+    var endpoint = PhoenixKitConsent.config.consentEndpoint;
+    if (!endpoint || typeof fetch !== "function") {
+      // Nowhere to deliver it, now or later.
+      setRevokePending(false);
+      return;
+    }
+
+    fetchServerConsent().then(function(answer) {
+      // 404: the banner is switched off, and the endpoint with it.
+      if (answer.status === 404) return setRevokePending(false);
+      if (answer.status !== 200) return;
+
+      var server = answer.body || {};
+      if (!server.decided || server.decided_at * 1000 > since) {
+        // Nothing left to take back, or nothing of this revocation's.
+        setRevokePending(false);
+      } else {
+        deliverRevoke();
+      }
+    }).catch(function(err) {
+      log("Could not deliver the pending revocation", err);
+    });
+  }
+
+  // A decision older than the cookie's lifetime has expired on the server;
+  // it expires here too, so the visitor is asked again rather than held to
+  // a choice nobody can show any more.
+  function isExpired(consent) {
+    if (!consent || !consent.timestamp) return false;
+    var days = PhoenixKitConsent.config.cookieDays || DEFAULT_COOKIE_DAYS;
+    var decided = Date.parse(consent.timestamp);
+    if (isNaN(decided)) return false;
+    return Date.now() - decided > days * 86400000;
+  }
+
+  function withdrew(before, after) {
+    if (!before) return false;
+    for (var i = 0; i < CATEGORIES.length; i++) {
+      var category = CATEGORIES[i];
+      if (category !== "necessary" && before[category] && !after[category]) return true;
+    }
+    return false;
+  }
+
+  function reportConsent(consent, source) {
+    var endpoint = PhoenixKitConsent.config.consentEndpoint;
+    if (!endpoint || typeof fetch !== "function") return Promise.resolve(false);
+
+    return fetch(endpoint, {
+      method: "POST",
+      credentials: "same-origin",
+      keepalive: true,
+      headers: { "content-type": "application/json", "accept": "application/json" },
+      body: JSON.stringify({
+        consent: {
+          analytics: !!consent.analytics,
+          marketing: !!consent.marketing,
+          preferences: !!consent.preferences
+        },
+        source: source
+      })
+    }).then(function(response) {
+      if (!response.ok) log("Consent endpoint returned " + response.status);
+      return response.ok;
+    }).catch(function(err) {
+      log("Could not report consent", err);
+      return false;
+    });
+  }
+
+  // Resolves to whether the server's copy is gone. With no endpoint there is
+  // no copy, and a 404 means the banner — and the endpoint with it — is
+  // switched off: both are "done", not something to retry on every page.
+  function forgetServerConsent() {
+    var endpoint = PhoenixKitConsent.config.consentEndpoint;
+    if (!endpoint || typeof fetch !== "function") return Promise.resolve(true);
+
+    return fetch(endpoint, {
+      method: "DELETE",
+      credentials: "same-origin",
+      keepalive: true,
+      headers: { "accept": "application/json" }
+    }).then(function(response) {
+      return response.ok || response.status === 404;
+    }).catch(function(err) {
+      log("Could not forget consent", err);
+      return false;
+    });
+  }
+
+  // On load: an expired decision is dropped, a live one is applied — and
+  // compared with the server's copy (`reconcileWithServer`), unless the
+  // policy has changed since, in which case the visitor is about to be
+  // asked again anyway. A revocation the server never heard of is sent
+  // again first.
+  function restoreConsent() {
+    var stored = loadConsent();
+
+    var revokedAt = revokePendingSince();
+    if (revokedAt !== null) {
+      if (stored) {
+        // A decision made after the revocation replaces it.
+        setRevokePending(false);
+      } else {
+        retryRevoke(revokedAt);
+      }
+    }
+
+    if (isExpired(stored)) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(VERSION_KEY);
+      } catch (e) {
+        log("Could not drop expired consent", e);
+      }
+      stored = null;
+    }
+
+    if (stored) {
+      PhoenixKitConsent.consent = stored;
+      applyConsent(stored);
+      if (getStoredVersion() === PhoenixKitConsent.config.policyVersion) {
+        reconcileWithServer(stored);
+      }
+    } else if (isOptInMode() && PhoenixKitConsent.config.consentMode === "strict") {
+      // Only block scripts in strict mode
+      blockScripts();
+    }
+  }
+
+  // One path for every decision: store, apply, report — then, once the
+  // server holds it, tell the page (`phx:consent-recorded`) and reload if
+  // something was taken back, since a script that already ran cannot be
+  // un-run and a page already loaded was served under the old choice.
+  function decide(consent, source) {
+    var before = PhoenixKitConsent.consent;
+    var reload = PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, consent);
+
+    PhoenixKitConsent.consent = consent;
+    saveConsent(consent);
+    // A new decision replaces a revocation still waiting to be delivered.
+    setRevokePending(false);
+    applyConsent(consent);
+
+    reportConsent(consent, source).then(function(recorded) {
+      // A report that did not arrive is made up for on the next page.
+      if (!recorded) setReconciled(false);
+      window.dispatchEvent(new CustomEvent("phx:consent-recorded", {
+        detail: { consent: consent, recorded: recorded }
+      }));
+      if (reload) window.location.reload();
+    });
+  }
+
+  // =====================================================
   // CROSS-TAB SYNC
   // =====================================================
 
   function setupCrossTabSync() {
     window.addEventListener("storage", function(e) {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          var newConsent = JSON.parse(e.newValue);
-          PhoenixKitConsent.consent = newConsent;
-          applyConsent(newConsent);
-          updateUI();
-          log("Cross-tab sync: consent updated");
-        } catch (err) {
-          log("Cross-tab sync error", err);
-        }
+      // Removed in another tab — the key itself, or all of storage
+      // (`e.key` is null then): the visitor took their consent back there,
+      // and this tab must stop acting on the old one. Applying a refusal of
+      // everything is what tells Google's consent mode and the page's own
+      // listeners (`phx:consent-updated`); forgetting it in memory alone
+      // would leave them on the old answer.
+      if (e.key === null || (e.key === STORAGE_KEY && e.newValue === null)) {
+        PhoenixKitConsent.consent = null;
+        applyConsent({ necessary: true, analytics: false, marketing: false, preferences: false });
+        updateUI();
+        log("Cross-tab sync: consent revoked");
+        return;
+      }
+
+      if (e.key !== STORAGE_KEY) return;
+
+      try {
+        var newConsent = JSON.parse(e.newValue);
+        PhoenixKitConsent.consent = newConsent;
+        applyConsent(newConsent);
+        updateUI();
+        log("Cross-tab sync: consent updated");
+      } catch (err) {
+        log("Cross-tab sync error", err);
       }
     });
   }
@@ -397,9 +809,9 @@
             // Categories
             '<div style="padding:1rem 1.5rem;overflow-y:auto;max-height:50vh">' +
               createCategoryHTML("necessary", "🔒", tc("necessary", "name", "Essential"), tc("necessary", "description", "Required for core functionality. Cannot be disabled."), true) +
-              createCategoryHTML("analytics", "📊", tc("analytics", "name", "Analytics"), tc("analytics", "description", "Help us understand how you use our site.")) +
-              createCategoryHTML("marketing", "📢", tc("marketing", "name", "Marketing"), tc("marketing", "description", "Used for personalized advertising.")) +
-              createCategoryHTML("preferences", "⚙️", tc("preferences", "name", "Preferences"), tc("preferences", "description", "Remember your settings and preferences.")) +
+              createCategoryHTML("analytics", "📊", tc("analytics", "name", "Analytics"), tc("analytics", "description", "Help us understand how you use our site."), false, (config.purposes || {}).analytics) +
+              createCategoryHTML("marketing", "📢", tc("marketing", "name", "Marketing"), tc("marketing", "description", "Used for personalized advertising."), false, (config.purposes || {}).marketing) +
+              createCategoryHTML("preferences", "⚙️", tc("preferences", "name", "Preferences"), tc("preferences", "description", "Remember your settings and preferences."), false, (config.purposes || {}).preferences) +
             '</div>' +
             // Modal Footer
             '<div style="padding:1rem 1.5rem;border-top:1px solid var(--pk-border);background:var(--pk-bg-alt)">' +
@@ -421,7 +833,12 @@
     '</div>';
   }
 
-  function createCategoryHTML(id, icon, name, description, required) {
+  function createCategoryHTML(id, icon, name, description, required, covers) {
+    var coversLine = (covers && covers.length) ?
+      '<p style="font-size:0.75rem;color:var(--pk-text-muted);margin:0.25rem 0 0 0" data-covers="' + escapeAttr(id) + '">' +
+        '<span style="font-weight:500">' + escapeText(t("covers", "Covers:")) + '</span> ' + escapeText(covers.join(", ")) +
+      '</p>' : '';
+
     var checkedAttr = required ? ' checked disabled' : '';
     var requiredBadge = required ? '<span class="badge badge-ghost badge-xs" style="margin-left:0.5rem">' + escapeText(t("required", "Required")) + '</span>' : '';
 
@@ -435,6 +852,7 @@
               requiredBadge +
             '</div>' +
             '<p style="font-size:0.75rem;color:var(--pk-text-muted);margin:0.25rem 0 0 0">' + escapeText(description) + '</p>' +
+            coversLine +
           '</div>' +
         '</div>' +
         '<label style="position:relative;display:inline-flex;cursor:pointer;flex-shrink:0">' +
@@ -559,9 +977,7 @@
       timestamp: new Date().toISOString()
     };
 
-    PhoenixKitConsent.consent = consent;
-    saveConsent(consent);
-    applyConsent(consent);
+    decide(consent, "banner");
     hideBanner();
     hideModal();
     showIcon();
@@ -578,9 +994,7 @@
       timestamp: new Date().toISOString()
     };
 
-    PhoenixKitConsent.consent = consent;
-    saveConsent(consent);
-    applyConsent(consent);
+    decide(consent, "banner");
     hideBanner();
     hideModal();
     showIcon();
@@ -592,9 +1006,7 @@
     var preferences = readCheckboxes();
     preferences.timestamp = new Date().toISOString();
 
-    PhoenixKitConsent.consent = preferences;
-    saveConsent(preferences);
-    applyConsent(preferences);
+    decide(preferences, "preferences");
     hideModal();
     showIcon();
 
@@ -622,10 +1034,17 @@
 
   PhoenixKitConsent.revokeConsent = function() {
     try {
+      var before = PhoenixKitConsent.consent;
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(VERSION_KEY);
       PhoenixKitConsent.consent = null;
       updateUI();
+      revokeOnServer().then(function() {
+        var none = { necessary: true, analytics: false, marketing: false, preferences: false };
+        if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, none)) {
+          window.location.reload();
+        }
+      });
       log("Consent revoked");
     } catch (e) {
       log("Could not revoke consent", e);
@@ -646,6 +1065,10 @@
       showIcon: config.show_icon || false,
       cookiePolicyUrl: config.cookie_policy_url || "/legal/cookie-policy",
       privacyPolicyUrl: config.privacy_policy_url || "/legal/privacy-policy",
+      consentEndpoint: config.consent_endpoint || null,
+      cookieName: config.cookie_name || DEFAULT_COOKIE_NAME,
+      cookieDays: config.cookie_days || DEFAULT_COOKIE_DAYS,
+      reloadOnWithdrawal: config.reload_on_withdrawal !== false,
       translations: config.translations || {}
     };
 
@@ -669,14 +1092,7 @@
     setupCrossTabSync();
 
     // Load existing consent
-    var stored = loadConsent();
-    if (stored) {
-      PhoenixKitConsent.consent = stored;
-      applyConsent(stored);
-    } else if (isOptInMode() && PhoenixKitConsent.config.consentMode === "strict") {
-      // Only block scripts in strict mode
-      blockScripts();
-    }
+    restoreConsent();
 
     // Update UI
     updateUI();
@@ -701,7 +1117,11 @@
       icon_position: rootElement.dataset.iconPosition || "bottom-right",
       show_icon: rootElement.dataset.showIcon === "true",
       cookie_policy_url: rootElement.dataset.cookiePolicyUrl || "/legal/cookie-policy",
-      privacy_policy_url: rootElement.dataset.privacyPolicyUrl || "/legal/privacy-policy"
+      privacy_policy_url: rootElement.dataset.privacyPolicyUrl || "/legal/privacy-policy",
+      consent_endpoint: rootElement.dataset.consentEndpoint || null,
+      cookie_name: rootElement.dataset.cookieName || DEFAULT_COOKIE_NAME,
+      cookie_days: parseInt(rootElement.dataset.cookieDays, 10) || DEFAULT_COOKIE_DAYS,
+      reload_on_withdrawal: rootElement.dataset.reloadOnWithdrawal !== "false"
     };
 
     PhoenixKitConsent.config = {
@@ -713,6 +1133,10 @@
       showIcon: config.show_icon,
       cookiePolicyUrl: config.cookie_policy_url,
       privacyPolicyUrl: config.privacy_policy_url,
+      consentEndpoint: config.consent_endpoint,
+      cookieName: config.cookie_name,
+      cookieDays: config.cookie_days,
+      reloadOnWithdrawal: config.reload_on_withdrawal,
       translations: {}
     };
 
@@ -730,14 +1154,7 @@
 
     setupCrossTabSync();
 
-    var stored = loadConsent();
-    if (stored) {
-      PhoenixKitConsent.consent = stored;
-      applyConsent(stored);
-    } else if (isOptInMode() && PhoenixKitConsent.config.consentMode === "strict") {
-      // Only block scripts in strict mode
-      blockScripts();
-    }
+    restoreConsent();
 
     updateUI();
 
@@ -802,7 +1219,21 @@
 
   // Export hook for Phoenix LiveView
   window.PhoenixKitHooks = window.PhoenixKitHooks || {};
+
+  // A LiveSocket built before this script ran holds the older copy's hook
+  // object; rewriting that object's callbacks in place reaches it, where
+  // assigning a new object would not.
+  var previousHook = window.PhoenixKitHooks.CookieConsent;
+  if (previous && previousHook && typeof previousHook === "object") {
+    previousHook.mounted = CookieConsentHook.mounted;
+    previousHook.destroyed = CookieConsentHook.destroyed;
+  }
+
   window.PhoenixKitHooks.CookieConsent = CookieConsentHook;
+
+  // What `js_sources/0` names: core's bundle compiler folds this into
+  // `window.PhoenixKitHooks` on hosts that load `phoenix_kit_modules.js`.
+  window.PhoenixKitLegalHooks = { CookieConsent: CookieConsentHook };
 
   // Expose manual-injection entry point for third-party / non-LiveView contexts.
   PhoenixKitConsent.init = fetchConfigAndInit;
@@ -810,15 +1241,29 @@
   // Export module
   window.PhoenixKitConsent = PhoenixKitConsent;
 
-  // Auto-init: the server decides visibility at render time. If it rendered
-  // #pk-consent-root, initialize from that element. Otherwise do nothing —
-  // the user is authenticated (hidden) or the widget is disabled.
-  // LiveView hook may have already initialized via `mounted` — the
-  // `initialized` guard prevents double-init.
-  document.addEventListener("DOMContentLoaded", function() {
+  // Auto-init. The LiveView hook may already have initialized via `mounted`;
+  // the `initialized` guard prevents a second run.
+  // The server decides visibility at render time: with a server-rendered
+  // `#pk-consent-root`, initialize from it; without one, do nothing — the
+  // user is signed in (hidden) or the widget is off.
+  //
+  // The exception is a page that was relying on the older bundled copy to
+  // inject the widget (a host layout with no component in it). Having
+  // retired that copy, this script injects in its place.
+  function autoInit() {
     if (PhoenixKitConsent.initialized) return;
     var root = document.getElementById("pk-consent-root");
-    if (root) initFromElement(root);
-  });
+    if (root) {
+      initFromElement(root);
+    } else if (previous) {
+      fetchConfigAndInit();
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", autoInit);
+  } else {
+    autoInit();
+  }
 
 })();
