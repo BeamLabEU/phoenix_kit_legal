@@ -175,4 +175,64 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogWriteTest do
       assert Map.has_key?(conn.resp_cookies, "pk_consent")
     end)
   end
+
+  test "a decision made signed out is logged once more, with the user, after sign-in" do
+    user_uuid = UUIDv7.generate()
+
+    in_shadow_table(fn ->
+      {:ok, _conn, anonymous} = Consent.record(request(), %{"analytics" => true}, version: "1.0")
+      cookie = fn consent -> [{"cookie", "pk_consent=#{Consent.encode(consent, @secret)}"}] end
+
+      assert Enum.map(rows(), & &1.user_uuid) == [nil, nil, nil]
+
+      {:ok, _conn, attributed} =
+        Consent.record(request(cookie.(anonymous)), %{"analytics" => true},
+          version: "1.0",
+          user_uuid: user_uuid
+        )
+
+      # Three more rows: the same decision, under the same consent ID, now
+      # naming who made it.
+      assert length(rows()) == 6
+      named = Enum.filter(rows(), &(&1.user_uuid == user_uuid))
+      assert length(named) == 3
+      assert Enum.all?(named, &(&1.session_id == anonymous.id))
+
+      # Once: the re-issued cookie says it is done.
+      for opts <- [[user_uuid: user_uuid], []] do
+        {:ok, _conn, _same} =
+          Consent.record(
+            request(cookie.(attributed)),
+            %{"analytics" => true},
+            [version: "1.0"] ++ opts
+          )
+      end
+
+      assert length(rows()) == 6
+    end)
+  end
+
+  test "a rejected entry is logged by field and message, never with what it holds" do
+    PhoenixKit.Cache.put(:settings, "legal_consent_log_ip", "true")
+    user_uuid = UUIDv7.generate()
+
+    # A version longer than its column: every entry is rejected by the
+    # changeset, before any table is touched.
+    {result, log} =
+      ExUnit.CaptureLog.with_log(fn ->
+        Consent.record(request(), %{"analytics" => true},
+          version: String.duplicate("9", 40),
+          user_uuid: user_uuid
+        )
+      end)
+
+    # The visitor's choice is honoured all the same.
+    assert {:ok, conn, _recorded} = result
+    assert Map.has_key?(conn.resp_cookies, "pk_consent")
+
+    assert log =~ "consent decision was not logged: consent_version should be at most"
+
+    for held <- ["127.0.0.1", user_uuid, "Ecto.Changeset", "ip_address", "999999"],
+        do: refute(log =~ held)
+  end
 end

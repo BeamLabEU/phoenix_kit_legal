@@ -3,6 +3,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsentTest do
 
   import Phoenix.LiveViewTest, only: [render_component: 2]
 
+  alias PhoenixKit.Modules.Legal
   alias PhoenixKit.Modules.Legal.CookieConsent
   alias PhoenixKit.Users.Auth.Scope
 
@@ -78,6 +79,57 @@ defmodule PhoenixKit.Modules.Legal.CookieConsentTest do
     test "a category with nothing declared under it says nothing about what it covers" do
       # No module registry runs in this suite, so nothing is declared.
       refute render(phoenix_kit_current_scope: nil) =~ "data-covers"
+    end
+
+    test "a category says what it covers when something is declared under it" do
+      html =
+        render(
+          phoenix_kit_current_scope: nil,
+          purposes: %{
+            "necessary" => ["Your privacy choices"],
+            "analytics" => ["Page statistics", "Search <terms>"],
+            "marketing" => []
+          }
+        )
+
+      assert [necessary, analytics] =
+               Regex.scan(~r/<p[^>]*data-covers="(\w+)"[^>]*>(.*?)<\/p>/s, html,
+                 capture: :all_but_first
+               )
+
+      assert ["necessary", text] = necessary
+      assert text =~ "Covers:"
+      assert text =~ "Your privacy choices"
+
+      assert ["analytics", text] = analytics
+      assert text =~ "Page statistics, Search &lt;terms&gt;"
+
+      # Nothing under an empty category, nor under one left out.
+      refute html =~ ~s(data-covers="marketing")
+      refute html =~ ~s(data-covers="preferences")
+    end
+
+    test "the script's part of the widget config is complete and is JSON" do
+      config = Legal.consent_record_config()
+
+      assert %{
+               consent_endpoint: "/phoenix_kit/api/consent",
+               cookie_name: "pk_consent",
+               cookie_days: 90,
+               reload_on_withdrawal: false,
+               purposes: purposes
+             } = config
+
+      assert is_map(purposes)
+
+      # Core's consent-config controller sends the whole map as JSON.
+      assert config |> Jason.encode!() |> Jason.decode!() == %{
+               "consent_endpoint" => "/phoenix_kit/api/consent",
+               "cookie_name" => "pk_consent",
+               "cookie_days" => 90,
+               "reload_on_withdrawal" => false,
+               "purposes" => Map.new(purposes, fn {category, titles} -> {category, titles} end)
+             }
     end
   end
 

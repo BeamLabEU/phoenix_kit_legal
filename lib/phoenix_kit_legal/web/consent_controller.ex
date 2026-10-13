@@ -9,14 +9,18 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   All three are public: a visitor decides before they are anyone. What keeps
   the write honest is in this module rather than in a session:
 
-    * **Same site only.** A browser sends `Origin` on every cross-origin
-      `POST`/`DELETE`; one that names another host is refused, so a third-party
-      page cannot record a "yes" in a visitor's name.
+    * **Same origin only.** A browser sends `Origin` on every cross-origin
+      `POST`/`DELETE`; one that names another host — or the same host on
+      another port, which shares the cookie but is another origin — is
+      refused, so a third-party page cannot record a "yes" in a visitor's
+      name. What counts as this site is the request's `Host`, the
+      `x-forwarded-host` a proxy set, or the configured `site_url`.
     * **Nothing is taken from the body but booleans** for the known
       categories and a source from a fixed list. The policy version, the
       consent ID and the time are the server's.
-    * **A repeated decision writes nothing**, and each address is held to a
-      few writes a minute, so the log cannot be filled by replaying a request.
+    * **A repeated decision writes nothing**, and each address (each /64,
+      for IPv6) is held to a few writes a minute, so the log cannot be filled
+      by replaying a request.
 
   The answer is the same whether or not the module is switched on, apart from
   the status: an endpoint that is off answers 404 and sets no cookie.
@@ -26,6 +30,7 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
 
   alias PhoenixKit.Modules.Legal
   alias PhoenixKit.Modules.Legal.Consent
+  alias PhoenixKit.Settings
   alias PhoenixKit.Users.Auth
   alias PhoenixKit.Users.RateLimiter.Backend, as: RateLimiter
   alias PhoenixKit.Utils.IpAddress
@@ -96,9 +101,9 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
     end
   end
 
-  # `Origin` when the browser sends it (always, on a cross-origin write),
-  # else `Sec-Fetch-Site`. A request carrying neither is not from a browser
-  # page at all — a script or a server — and has no visitor's cookie to abuse.
+  # `Origin` when the browser sends one that names an origin, else
+  # `Sec-Fetch-Site`. A request carrying neither is not from a browser page
+  # at all — a script or a server — and has no visitor's cookie to abuse.
   defp require_same_site(conn, _opts) do
     if same_site?(conn) do
       conn
@@ -107,25 +112,90 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
     end
   end
 
+  # `Origin: null` is not a refusal: a browser sends it on a same-origin
+  # write too, when the page's `Referrer-Policy` is `no-referrer`. It only
+  # says the header has nothing to tell, so the browser's own verdict in
+  # `Sec-Fetch-Site` decides, as it does when there is no `Origin` at all.
   defp same_site?(conn) do
-    case {get_req_header(conn, "origin"), get_req_header(conn, "sec-fetch-site")} do
-      {[origin | _], _} -> origin_host(origin) == conn.host
-      {[], [site | _]} -> site in ["same-origin", "none"]
-      {[], []} -> true
+    case origin(conn) do
+      {scheme, authority} -> authority in own_authorities(conn, scheme)
+      nil -> fetch_site_allows?(conn)
     end
   end
 
-  defp origin_host(origin) do
-    case URI.parse(origin) do
-      %URI{host: host} when is_binary(host) -> host
+  defp fetch_site_allows?(conn) do
+    case get_req_header(conn, "sec-fetch-site") do
+      [site | _] -> site in ["same-origin", "none"]
+      [] -> true
+    end
+  end
+
+  defp origin(conn) do
+    with [value | _] <- get_req_header(conn, "origin"),
+         %URI{scheme: scheme, host: host, port: port}
+         when scheme in ["http", "https"] and is_binary(host) and host != "" <- URI.parse(value) do
+      {scheme, authority(host, port)}
+    else
       _ -> nil
     end
   end
 
-  defp rate_limit(conn, _opts) do
-    key = "legal_consent:" <> (IpAddress.client_address(conn) || "unknown")
+  # Every name this site answers to, as `{host, port}`. Host and port, not the
+  # host alone: cookies ignore the port, so a page on another port of the
+  # same host would otherwise write with the visitor's cookie.
+  #
+  #   * the `Host` header — not `conn.port`, which behind a proxy can be the
+  #     port the app listens on rather than the one the visitor used;
+  #   * `x-forwarded-host`, which a proxy sets and a cross-site page cannot
+  #     (a browser's `fetch` may not send it across origins without a
+  #     preflight this endpoint does not answer);
+  #   * the operator's `site_url`.
+  #
+  # A header carries no scheme, so a missing port is the default of the
+  # scheme the `Origin` came with.
+  defp own_authorities(conn, scheme) do
+    host =
+      case get_req_header(conn, "host") do
+        [value | _] -> header_authority(value, scheme)
+        # HTTP/2 has no `Host` header; the adapter read the authority.
+        [] -> authority(conn.host, conn.port)
+      end
 
-    case RateLimiter.hit(key, :timer.minutes(1), @writes_per_minute) do
+    forwarded =
+      conn
+      |> get_req_header("x-forwarded-host")
+      |> Enum.flat_map(&String.split(&1, ","))
+      |> Enum.map(&header_authority(String.trim(&1), scheme))
+
+    Enum.reject([host, site_url_authority() | forwarded], &is_nil/1)
+  end
+
+  defp header_authority(value, scheme) do
+    case URI.parse(scheme <> "://" <> value) do
+      %URI{host: host, port: port} when is_binary(host) and host != "" -> authority(host, port)
+      _ -> nil
+    end
+  end
+
+  defp site_url_authority do
+    with url when is_binary(url) and url != "" <- Settings.get_setting_cached("site_url", nil),
+         %URI{host: host, port: port} when is_binary(host) and host != "" <- URI.parse(url) do
+      authority(host, port)
+    else
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  catch
+    :exit, _ -> nil
+  end
+
+  # `URI.parse/1` fills in the scheme's default port, so `https://a` and
+  # `https://a:443` are the same authority here.
+  defp authority(host, port), do: {String.downcase(host), port}
+
+  defp rate_limit(conn, _opts) do
+    case RateLimiter.hit(rate_limit_key(conn), :timer.minutes(1), @writes_per_minute) do
       {:deny, _retry_ms} ->
         conn |> put_status(:too_many_requests) |> json(%{error: "too many requests"}) |> halt()
 
@@ -138,6 +208,20 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
     _ -> conn
   catch
     :exit, _ -> conn
+  end
+
+  # One bucket per network, not per address: an IPv6 client is handed a whole
+  # /64 and can use a new address for every request. Core gained `network/1`
+  # in 2.27; before that the address is all there is.
+  defp rate_limit_key(conn) do
+    address = IpAddress.client_address(conn) || "unknown"
+
+    network =
+      if function_exported?(IpAddress, :network, 1),
+        do: IpAddress.network(address),
+        else: address
+
+    "legal_consent:" <> network
   end
 
   # The route carries no auth pipeline — a visitor decides before signing in —

@@ -41,6 +41,10 @@
 
   const STORAGE_KEY = "pk_consent";
   const VERSION_KEY = "pk_consent_version";
+  const REVOKE_PENDING_KEY = "pk_consent_revoke_pending";
+  // sessionStorage; SYNCED_AT_KEY is its localStorage stand-in.
+  const SYNCED_KEY = "pk_consent_synced";
+  const SYNCED_AT_KEY = "pk_consent_synced_at";
   const CATEGORIES = ["necessary", "analytics", "marketing", "preferences"];
 
   // Get PhoenixKit URL prefix from global variable set by PhoenixKit
@@ -199,13 +203,122 @@
   // writes the audit record and answers with a signed first-party cookie —
   // the copy server-side collection obeys.
 
-  function hasServerCookie() {
-    var name = PhoenixKitConsent.config.cookieName || DEFAULT_COOKIE_NAME;
-    var parts = (document.cookie || "").split(";");
-    for (var i = 0; i < parts.length; i++) {
-      if (parts[i].replace(/^\s+/, "").indexOf(name + "=") === 0) return true;
+  // Whether this browser has already compared its decision with the
+  // server's in this session. sessionStorage when there is one; otherwise a
+  // timestamp in localStorage, good for a day.
+  function reconciledAlready() {
+    try {
+      if (window.sessionStorage) return sessionStorage.getItem(SYNCED_KEY) === "1";
+    } catch (e) {
+      // Fall through to localStorage.
     }
-    return false;
+    try {
+      var at = parseInt(localStorage.getItem(SYNCED_AT_KEY), 10);
+      return !isNaN(at) && Date.now() - at < 86400000;
+    } catch (e) {
+      // Nowhere to remember it: say it was done, rather than repeat it on
+      // every page.
+      return true;
+    }
+  }
+
+  function setReconciled(done) {
+    try {
+      if (window.sessionStorage) {
+        if (done) {
+          sessionStorage.setItem(SYNCED_KEY, "1");
+        } else {
+          sessionStorage.removeItem(SYNCED_KEY);
+        }
+        return;
+      }
+    } catch (e) {
+      // Fall through to localStorage.
+    }
+    try {
+      if (done) {
+        localStorage.setItem(SYNCED_AT_KEY, String(Date.now()));
+      } else {
+        localStorage.removeItem(SYNCED_AT_KEY);
+      }
+    } catch (e) {
+      log("Could not remember the reconciliation", e);
+    }
+  }
+
+  function sameCategories(server, consent) {
+    if (!server || typeof server !== "object") return false;
+    for (var i = 0; i < CATEGORIES.length; i++) {
+      var category = CATEGORIES[i];
+      if (category !== "necessary" && !!server[category] !== !!consent[category]) return false;
+    }
+    return true;
+  }
+
+  // Asks the server what it holds for this browser and hands it this
+  // browser's decision when it holds none, or another one — a decision made
+  // before the server kept any, a report that never arrived (a withdrawal
+  // whose POST failed would otherwise leave the old cookie answering
+  // "granted" for months), or a cookie the server can no longer read.
+  //
+  // The server is asked, rather than the cookie looked at, because a cookie
+  // can be there and mean nothing to the server: signed with a key since
+  // rotated, or set by another application on the same host.
+  //
+  // Once per session. A browser that refuses the cookie would otherwise
+  // report on every page, and the server, seeing no cookie, would log each
+  // report as a new visitor's decision.
+  function reconcileWithServer(consent) {
+    var endpoint = PhoenixKitConsent.config.consentEndpoint;
+    if (!endpoint || typeof fetch !== "function") return;
+    if (reconciledAlready()) return;
+    setReconciled(true);
+
+    fetch(endpoint, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { "accept": "application/json" }
+    }).then(function(response) {
+      if (!response.ok) throw new Error("Consent endpoint returned " + response.status);
+      return response.json();
+    }).then(function(server) {
+      if (!server.decided || !sameCategories(server.consent, consent)) {
+        reportConsent(consent, "sync");
+      }
+    }).catch(function(err) {
+      log("Could not compare consent with the server", err);
+    });
+  }
+
+  function revokePending() {
+    try {
+      return localStorage.getItem(REVOKE_PENDING_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setRevokePending(pending) {
+    try {
+      if (pending) {
+        localStorage.setItem(REVOKE_PENDING_KEY, "1");
+      } else {
+        localStorage.removeItem(REVOKE_PENDING_KEY);
+      }
+    } catch (e) {
+      log("Could not update the pending revocation", e);
+    }
+  }
+
+  // The DELETE that takes the server's copy back. The flag is set before it
+  // and cleared only when the server answers, so a request that never
+  // arrived (offline, a closed tab) is sent again on the next page.
+  function revokeOnServer() {
+    setRevokePending(true);
+    return forgetServerConsent().then(function(forgotten) {
+      if (forgotten) setRevokePending(false);
+      return forgotten;
+    });
   }
 
   // A decision older than the cookie's lifetime has expired on the server;
@@ -272,11 +385,21 @@
   }
 
   // On load: an expired decision is dropped, a live one is applied — and
-  // handed to the server when it holds no copy (a decision made before the
-  // server kept one, or a cleared cookie), unless the policy has changed
-  // since, in which case the visitor is about to be asked again anyway.
+  // compared with the server's copy (`reconcileWithServer`), unless the
+  // policy has changed since, in which case the visitor is about to be
+  // asked again anyway. A revocation the server never heard of is sent
+  // again first.
   function restoreConsent() {
     var stored = loadConsent();
+
+    if (revokePending()) {
+      if (stored) {
+        // A decision made after the revocation replaces it.
+        setRevokePending(false);
+      } else {
+        revokeOnServer();
+      }
+    }
 
     if (isExpired(stored)) {
       try {
@@ -291,8 +414,8 @@
     if (stored) {
       PhoenixKitConsent.consent = stored;
       applyConsent(stored);
-      if (!hasServerCookie() && getStoredVersion() === PhoenixKitConsent.config.policyVersion) {
-        reportConsent(stored, "sync");
+      if (getStoredVersion() === PhoenixKitConsent.config.policyVersion) {
+        reconcileWithServer(stored);
       }
     } else if (isOptInMode() && PhoenixKitConsent.config.consentMode === "strict") {
       // Only block scripts in strict mode
@@ -310,9 +433,13 @@
 
     PhoenixKitConsent.consent = consent;
     saveConsent(consent);
+    // A new decision replaces a revocation still waiting to be delivered.
+    setRevokePending(false);
     applyConsent(consent);
 
     reportConsent(consent, source).then(function(recorded) {
+      // A report that did not arrive is made up for on the next page.
+      if (!recorded) setReconciled(false);
       window.dispatchEvent(new CustomEvent("phx:consent-recorded", {
         detail: { consent: consent, recorded: recorded }
       }));
@@ -326,16 +453,25 @@
 
   function setupCrossTabSync() {
     window.addEventListener("storage", function(e) {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          var newConsent = JSON.parse(e.newValue);
-          PhoenixKitConsent.consent = newConsent;
-          applyConsent(newConsent);
-          updateUI();
-          log("Cross-tab sync: consent updated");
-        } catch (err) {
-          log("Cross-tab sync error", err);
-        }
+      if (e.key !== STORAGE_KEY) return;
+
+      // Removed in another tab: the visitor took their consent back there,
+      // and this tab must stop answering with the old one.
+      if (e.newValue === null) {
+        PhoenixKitConsent.consent = null;
+        updateUI();
+        log("Cross-tab sync: consent revoked");
+        return;
+      }
+
+      try {
+        var newConsent = JSON.parse(e.newValue);
+        PhoenixKitConsent.consent = newConsent;
+        applyConsent(newConsent);
+        updateUI();
+        log("Cross-tab sync: consent updated");
+      } catch (err) {
+        log("Cross-tab sync error", err);
       }
     });
   }
@@ -784,7 +920,7 @@
       localStorage.removeItem(VERSION_KEY);
       PhoenixKitConsent.consent = null;
       updateUI();
-      forgetServerConsent().then(function() {
+      revokeOnServer().then(function() {
         var none = { necessary: true, analytics: false, marketing: false, preferences: false };
         if (PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, none)) {
           window.location.reload();

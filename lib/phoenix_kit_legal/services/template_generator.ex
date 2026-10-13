@@ -21,6 +21,13 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
     * `@dpo_address` - DPO address
     * `@frameworks` - List of selected framework IDs
     * `@effective_date` - Current date in ISO format
+    * `@language` - Language code the page is rendered in
+    * `@data_collection` - What the site's modules declare they collect: a map
+      of consent category (`"necessary"`, `"analytics"`, `"marketing"`,
+      `"preferences"`) to the listed entries, each with `title`,
+      `description`, `data`, `retention`, `storage` and its legal `basis` in
+      words. Every category is always present; a context that leaves the
+      variable out gets all four empty.
 
   ## Usage
 
@@ -34,6 +41,8 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   """
 
   require Logger
+
+  alias PhoenixKit.Modules.Legal.DataCollection
 
   @templates_dir "legal_templates"
 
@@ -52,7 +61,12 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   @spec render(String.t(), map(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def render(template_name, context, language \\ "en") when is_map(context) do
     template_path = get_template_path(template_name, language)
-    context_with_language = Map.put(context, :language, language)
+    # A context built before templates read `@data_collection` (a host
+    # calling this directly) still renders: it declares nothing.
+    context_with_language =
+      context
+      |> Map.put(:language, language)
+      |> put_new_data_collection()
 
     if File.exists?(template_path) do
       try do
@@ -212,6 +226,14 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
         rescue
           _ -> []
         end
+    end
+  end
+
+  defp put_new_data_collection(context) do
+    if Map.has_key?(context, :data_collection) or Map.has_key?(context, "data_collection") do
+      context
+    else
+      Map.put(context, :data_collection, DataCollection.by_category([]))
     end
   end
 

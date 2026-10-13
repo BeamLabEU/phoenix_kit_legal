@@ -17,6 +17,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
   @compile {:no_warn_undefined,
             [
+              {PhoenixKitWeb.Actor, :opts, 1},
               {PhoenixKit.Modules.Publishing, :enabled?, 0},
               {PhoenixKit.Modules.Publishing, :enabled_language_codes, 0},
               {PhoenixKit.Modules.Publishing, :get_primary_language, 0}
@@ -98,7 +99,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
         [framework_id | current]
       end
 
-    case Legal.set_frameworks(updated) do
+    case Legal.set_frameworks(updated, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply, assign(socket, :selected_frameworks, updated)}
 
@@ -112,7 +113,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     from_email = socket.assigns.from_email
     dpo_contact = Map.put(socket.assigns.dpo_contact, "email", from_email)
 
-    case Legal.update_dpo_contact(dpo_contact) do
+    case Legal.update_dpo_contact(dpo_contact, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -129,7 +130,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     company_address = socket.assigns.company_address_formatted
     dpo_contact = Map.put(socket.assigns.dpo_contact, "address", company_address)
 
-    case Legal.update_dpo_contact(dpo_contact) do
+    case Legal.update_dpo_contact(dpo_contact, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -150,7 +151,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
       "address" => params["dpo_address"] || ""
     }
 
-    case Legal.update_dpo_contact(dpo_contact) do
+    case Legal.update_dpo_contact(dpo_contact, actor_opts(socket)) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -271,7 +272,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   @impl true
   def handle_event("toggle_consent_widget", _params, socket) do
     if socket.assigns.consent_widget_enabled do
-      case Legal.disable_consent_widget() do
+      case Legal.disable_consent_widget(actor_opts(socket)) do
         {:ok, _} ->
           {:noreply,
            socket
@@ -284,7 +285,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
           {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
       end
     else
-      case Legal.enable_consent_widget() do
+      case Legal.enable_consent_widget(actor_opts(socket)) do
         {:ok, _} ->
           show_icon = Legal.has_opt_in_framework?()
 
@@ -306,11 +307,16 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     consent_mode = params["consent_mode"] || "strict"
     hide_for_auth = params["hide_for_authenticated"] == "true"
 
-    with {:ok, _} <- Legal.update_consent_mode(consent_mode),
-         :ok <- Consent.update_settings(consent_record_params(params)),
-         {:ok, _} <- Legal.update_hide_for_authenticated(hide_for_auth),
-         {:ok, _} <- Legal.update_icon_position(params["icon_position"] || "bottom-right"),
-         {:ok, _} <- update_google_consent_mode(params["google_consent_mode"]) do
+    actor = actor_opts(socket)
+
+    # The record's settings go first: they are the only ones checked before
+    # anything is written, so a refused number of days leaves all as it was.
+    with :ok <- Consent.update_settings(consent_record_params(params), actor),
+         {:ok, _} <- Legal.update_consent_mode(consent_mode, actor),
+         {:ok, _} <- Legal.update_hide_for_authenticated(hide_for_auth, actor),
+         {:ok, _} <-
+           Legal.update_icon_position(params["icon_position"] || "bottom-right", actor),
+         {:ok, _} <- update_google_consent_mode(params["google_consent_mode"], actor) do
       # Recalculate show_icon based on new settings
       show_icon = Legal.should_show_consent_icon?()
 
@@ -325,6 +331,16 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
        |> assign_collection()
        |> put_flash(:info, gettext("Consent widget settings saved"))}
     else
+      {:error, :invalid_days} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Enter a whole number of days from 1 to %{max}. Nothing was saved.",
+             max: Consent.day_bounds().max
+           )
+         )}
+
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Failed to save settings"))}
     end
@@ -338,8 +354,8 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   def handle_event("toggle_collection", %{"key" => key}, socket) do
     result =
       if key in socket.assigns.hidden_collection,
-        do: DataCollection.show(key),
-        else: DataCollection.hide(key)
+        do: DataCollection.show(key, actor_opts(socket)),
+        else: DataCollection.hide(key, actor_opts(socket))
 
     case result do
       {:ok, _} ->
@@ -396,8 +412,27 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   defp category_label("preferences"), do: gettext("Preferences")
   defp category_label(other), do: other
 
-  defp update_google_consent_mode("true"), do: Legal.enable_google_consent_mode()
-  defp update_google_consent_mode(_), do: Legal.disable_google_consent_mode()
+  defp update_google_consent_mode("true", actor), do: Legal.enable_google_consent_mode(actor)
+  defp update_google_consent_mode(_, actor), do: Legal.disable_google_consent_mode(actor)
+
+  # Who is changing a setting, for the settings history: every write on this
+  # page carries it. Core's `PhoenixKitWeb.Actor` is the one place that knows
+  # how to read the acting user off a socket; it arrived in 2.38, so on an
+  # older core the scope is read here instead.
+  defp actor_opts(socket) do
+    actor =
+      if Code.ensure_loaded?(PhoenixKitWeb.Actor) and
+           function_exported?(PhoenixKitWeb.Actor, :opts, 1) do
+        PhoenixKitWeb.Actor.opts(socket)
+      else
+        case socket.assigns[:phoenix_kit_current_scope] do
+          %{user: %{uuid: uuid}} when is_binary(uuid) -> [actor_uuid: uuid]
+          _ -> []
+        end
+      end
+
+    Keyword.put(actor, :source, "settings")
+  end
 
   defp publishing_module_languages do
     mod = PhoenixKit.Modules.Publishing

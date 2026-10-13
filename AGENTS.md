@@ -122,8 +122,15 @@ breaks consumers, never this repo).
 - **`enabled?/0`** must survive a missing database and return `false`. It reads
   `Settings.get_boolean_setting("legal_enabled", false)`, whose rescue in core
   supplies that; do not replace it with a bare Repo call.
-- **Activity/audit threading:** settings writes go through
-  `Settings.update_setting_with_module(key, value, "legal")`. Page publishing
+- **Activity/audit threading:** every settings write goes through
+  `Legal.put_setting/4`, and every writer takes `opts \\ []` and passes them
+  on: `:actor_uuid` and `:source` are what core's settings history records.
+  The settings LiveView builds them in `actor_opts/1` (core's
+  `PhoenixKitWeb.Actor` when it is there, plus `source: "settings"`) — a new
+  write on that page must carry it. `put_setting/4` feature-detects the
+  4-arity core writers (core ≥ 2.16) and resolves the writer module from
+  `config :phoenix_kit_legal, :settings_writer`, which only this package's
+  tests set (`Test.SettingsRecorder`). Page publishing
   passes `actor_uuid:` — `publish_version/4` audits by that key and ignores the
   `:scope` that `update_post/4` accepts, so a scope passed straight through is
   silently dropped from the audit trail.
@@ -141,19 +148,45 @@ breaks consumers, never this repo).
 - **The server's copy of a decision is the signed `pk_consent` cookie**
   (`Legal.Consent`). `localStorage` is the browser's copy and is never
   trusted by the server. `Consent.read/1`, `status/2` and `objected?/1` are
-  called on other modules' hot paths: they must stay free of database queries
-  (settings through the **cached** readers only) and must never raise. Policy
-  staleness is the banner's job, not theirs — deriving the current version
-  costs a Publishing query.
-- **Consent endpoint trust boundary** lives in `ConsentController`: same-site
-  only, booleans for known categories only, server-chosen version/ID/time,
-  no second log row for an unchanged decision, per-address rate limit. It is
-  public and CSRF-less on purpose; do not move it into `:browser`.
+  called on other modules' hot paths: they must make no database query of
+  their own (settings through the **cached** readers only, which refill from
+  the database on a cache miss — a settings-cache refill at most) and must
+  never raise, whatever they are handed. Policy staleness is the banner's
+  job, not theirs — deriving the current version costs a Publishing query.
+  The payload is `id`, `v`, `c`, `s`, `t` and `u` (the log entry names a
+  user); a cookie without `u` must keep decoding. The log line for a failed
+  write goes through `Consent.describe_failure/1` — never `inspect` a
+  changeset or print an exception's message there, both hold the visitor's
+  address.
+- **The banner script reconciles with the server, not with the cookie.** A
+  `pk_consent` cookie can exist and mean nothing to the server (a rotated
+  `secret_key_base`, another app on the host), so on load the script `GET`s
+  the endpoint and re-POSTs the local decision when the server holds none or
+  another — once per browser session (`sessionStorage`, or a 24-hour
+  `localStorage` timestamp). Without that cap a browser that refuses the
+  cookie writes three audit rows on every page.
+- **Consent endpoint trust boundary** lives in `ConsentController`: same
+  origin only, booleans for known categories only, server-chosen
+  version/ID/time, no second log row for an unchanged decision (one more,
+  with the user, when a signed-out decision returns signed in), a rate limit
+  per address (per /64 for IPv6). It is public and CSRF-less on purpose; do
+  not move it into `:browser`. Same origin means the `Origin`'s host **and
+  port** against the `Host` header, `x-forwarded-host` or `site_url` — never
+  `conn.port`, and never the hostname alone (cookies ignore ports, origins do
+  not). `Origin: null` is not a refusal; it falls through to
+  `Sec-Fetch-Site`.
 - **What the site collects is declared, not written** (`Legal.DataCollection`):
   modules export `data_collection/0`, found by name — never add a behaviour
   callback or a dependency for it. A declaration that raises or is malformed
-  is dropped, never fatal. This module's own entry is `Legal.data_collection/0`;
-  a new cookie, storage key or logged field goes there.
+  is dropped, never fatal (a raise is logged with the module's name). This
+  module's own entry is `Legal.data_collection/0`; a new cookie, storage key
+  or logged field goes there, and a test compares it with the `*_KEY`
+  constants of the banner script. Declarations in a given language come from
+  `fetch_declared/2`, which evaluates them in a fresh process: a
+  backend-specific Gettext locale (core sets one) beats `Gettext.put_locale/1`,
+  so changing the caller's locale is not enough. A list that cannot be
+  gathered is an error (`generate_page/2` → `{:error, {:data_collection, _}}`),
+  never an empty policy. The policy fingerprint is always taken in English.
 - **Consent vocabulary:** types are `"necessary"` (always on), `"analytics"`,
   `"marketing"`, `"preferences"`; modes are `"strict"` (opt-in, the default for
   GDPR) and `"notice"` (opt-out/informational).
@@ -236,8 +269,9 @@ Key modules:
   `create/1`, `log_consents/2`.
 - **`Legal.Consent`** — the signed cookie (`read/1`, `status/2`,
   `objected?/1`), `record/3` and `forget/2`, and the record's settings.
-- **`Legal.DataCollection`** — `declared/0`, `listed/1`, `by_category/1`,
-  the operator's hidden keys, per-entry warnings, the policy fingerprint.
+- **`Legal.DataCollection`** — `declared/0`, `fetch_declared/2` (in a given
+  language), `listed/1`, `by_category/1`, the operator's hidden keys,
+  per-entry warnings, the policy fingerprint.
 - **`Legal.TemplateGenerator`** — EEx rendering with parent-app overrides.
 - **`Legal.CookieConsent`** — the glass-morphic widget component.
 - **`PhoenixKitWeb.Live.Modules.Legal.Settings`** — the admin LiveView.
@@ -281,10 +315,10 @@ the outer transaction and `{:error, errors}` surfaces there instead.
 | `legal_hide_for_authenticated` | hide the widget for logged-in users |
 | `legal_consent_log_enabled` | write each decision to the consent log (default on) |
 | `legal_consent_log_ip`, `legal_consent_log_user_agent` | keep the address / a User-Agent hash with a log entry (default off) |
-| `legal_consent_cookie_days` | days a decision lasts (default 180, capped at 730) |
+| `legal_consent_cookie_days` | days a decision lasts (default 180). A write outside 1..730 is refused (`{:error, :invalid_days}`); a stored value out of range is clamped on read |
 | `legal_consent_reload_on_withdrawal` | reload the page when a consent is taken back (default on) |
 | `legal_hidden_collection` | JSON `{"items": [keys]}` — declared entries the operator hid |
-| `legal_policy_collection_fingerprint` | what the Cookie Policy was last generated from |
+| `legal_policy_collection_fingerprint` | what the Cookie Policy was last generated from: a hash of the listed entries' key, mode, category, data, retention and stored items (name, kind, duration), taken in English |
 
 ### Compliance frameworks
 
@@ -311,7 +345,8 @@ Every template receives `@company_name`, `@company_address`, `@company_country`,
 `@company_website`, `@registration_number`, `@vat_number`, `@dpo_name`,
 `@dpo_email`, `@dpo_phone`, `@dpo_address`, `@frameworks`, `@effective_date`,
 `@language`, `@data_collection` (the listed declarations by consent category,
-each with its `basis` in words).
+each with its `basis` in words; text already escaped for Markdown tables;
+defaults to four empty categories when a caller's context leaves it out).
 
 ### Public route contract
 

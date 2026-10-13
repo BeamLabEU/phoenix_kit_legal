@@ -232,6 +232,7 @@
                         type="button"
                         class="btn btn-outline join-item"
                         phx-click="import_dpo_email"
+                        phx-disable-with={gettext("Importing...")}
                         title={gettext("Import from General Settings")}
                       >
                         <.icon name="hero-arrow-down-tray" class="w-4 h-4" />
@@ -275,6 +276,7 @@
                         type="button"
                         class="btn btn-outline join-item"
                         phx-click="import_dpo_address"
+                        phx-disable-with={gettext("Importing...")}
                         title={gettext("Import from Company Address")}
                       >
                         <.icon name="hero-arrow-down-tray" class="w-4 h-4" />
@@ -292,7 +294,11 @@
               </div>
 
               <div class="card-actions justify-end mt-4">
-                <button type="submit" class="btn btn-primary">
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  phx-disable-with={gettext("Saving...")}
+                >
                   {gettext("Save DPO Contact")}
                 </button>
               </div>
@@ -314,6 +320,7 @@
             </div>
             <button
               phx-click="reset_legal_pages"
+              phx-disable-with={gettext("Resetting...")}
               data-confirm={gettext("This will delete all legal pages and their group. You will need to regenerate them. Continue?")}
               class="btn btn-warning btn-sm"
             >
@@ -349,6 +356,7 @@
                 <% end %>
                 <button
                   phx-click="generate_all_pages"
+                  phx-disable-with={gettext("Generating...")}
                   phx-value-language={@selected_generation_language}
                   class="btn btn-primary"
                   disabled={@generating or Enum.empty?(@selected_frameworks)}
@@ -451,6 +459,7 @@
                                 <%= if get_page_status(page_type, @generated_pages) != "published" do %>
                                   <button
                                     phx-click="publish_page"
+                                    phx-disable-with={gettext("Publishing...")}
                                     phx-value-page_slug={page_type}
                                     class="btn btn-sm btn-success"
                                   >
@@ -460,6 +469,7 @@
                               <% end %>
                               <button
                                 phx-click="generate_page"
+                                phx-disable-with={gettext("Generating...")}
                                 phx-value-page_type={page_type}
                                 phx-value-language={@selected_generation_language}
                                 class="btn btn-sm btn-outline"
@@ -769,7 +779,7 @@
                   </.checkbox>
 
                   <label class="flex flex-wrap items-center gap-3" for="consent_cookie_days">
-                    <span class="text-sm">{gettext("Ask again after")}</span>
+                    <span class="text-sm">{gettext("Ask again after (days)")}</span>
                     <input
                       type="number"
                       id="consent_cookie_days"
@@ -779,12 +789,15 @@
                       max={@consent_record.max_days}
                       class="input input-bordered input-sm w-24"
                     />
-                    <span class="text-sm">{gettext("days")}</span>
                   </label>
                 </div>
 
                 <div class="card-actions justify-end">
-                  <button type="submit" class="btn btn-primary">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    phx-disable-with={gettext("Saving...")}
+                  >
                     {gettext("Save Settings")}
                   </button>
                 </div>

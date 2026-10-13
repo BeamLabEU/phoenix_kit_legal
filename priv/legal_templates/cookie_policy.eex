@@ -31,9 +31,8 @@ These cookies are essential for the website to function properly. They enable co
 
 | Cookie Name | Purpose | Duration |
 |-------------|---------|----------|
-| session_id | User session management | Session |
-| csrf_token | Security - prevents cross-site request forgery | Session |
-| remember_token | Persistent login functionality | 14 days |
+| Site session cookie | Keeps you signed in and protects forms against forgery | Session |
+| Sign-in reminder cookie | Keeps you signed in when you ask to be remembered | Set by the site |
 <%= for entry <- @data_collection["necessary"], item <- entry.storage do %>| <%= item.name %> (<%= item.kind %>) | <%= item.purpose %> | <%= item.duration %> |
 <% end %>
 ### 3.2 Performance/Analytics
@@ -98,7 +97,7 @@ Nothing in this category is stored on your device. What we collect under it is l
 
 ### 3.5 What We Collect and Why
 
-<%= for {_category, entries} <- @data_collection, entry <- entries do %>
+<%= for category <- ~w(necessary analytics preferences marketing), entry <- @data_collection[category] do %>
 #### <%= entry.title %>
 
 <%= entry.description %>

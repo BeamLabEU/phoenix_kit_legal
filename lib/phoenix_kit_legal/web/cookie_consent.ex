@@ -98,6 +98,13 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
     default: nil,
     doc: "PhoenixKit scope for auth-based visibility check"
 
+  # Core's layouts call this component with a fixed list of attributes, so
+  # this one stays optional: left out, the modules are asked.
+  attr :purposes, :map,
+    default: nil,
+    doc:
+      "What each category covers, as category => titles. Default: what the site's modules declare"
+
   def cookie_consent(assigns) do
     if should_hide_for_user?(assigns[:phoenix_kit_current_scope]) do
       ~H""
@@ -122,7 +129,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
       assigns
       |> assign(:categories, translated_categories())
       |> assign(:show_icon, show_icon)
-      |> assign(:purposes, Legal.consent_purposes())
+      |> assign(:purposes, assigns[:purposes] || Legal.consent_purposes())
       |> assign(:consent_endpoint, Legal.consent_endpoint())
       |> assign(:cookie_days, Consent.cookie_days())
       |> assign(:reload_on_withdrawal, Consent.reload_on_withdrawal?())

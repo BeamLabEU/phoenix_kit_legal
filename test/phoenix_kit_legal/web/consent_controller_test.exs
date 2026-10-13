@@ -18,20 +18,33 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
           {"legal_consent_log_user_agent", "false"},
           {"legal_consent_cookie_days", "180"},
           # The manual version: no legal page exists to derive one from.
-          {"legal_policy_version", "1.0"}
+          {"legal_policy_version", "1.0"},
+          {"site_url", ""}
         ],
         do: PhoenixKit.Cache.put(:settings, key, value)
 
     :ok
   end
 
-  defp call(method, action, params \\ %{}, headers \\ []) do
-    conn = %{conn(method, "/phoenix_kit/api/consent", params) | secret_key_base: @secret}
+  # `Plug.Test` sets `conn.host` but sends no `Host` header, and
+  # `put_req_header/3` refuses to add one; a real request always has it (or
+  # an HTTP/2 authority). So the helper puts the header where the web server
+  # would, unless the test brings its own.
+  defp call(method, action, params \\ %{}, headers \\ [], conn_fields \\ %{}) do
+    conn =
+      conn(method, "/phoenix_kit/api/consent", params)
+      |> Map.put(:secret_key_base, @secret)
+      |> Map.merge(conn_fields)
 
-    headers
-    |> Enum.reduce(conn, fn {name, value}, acc -> put_req_header(acc, name, value) end)
-    |> ConsentController.call(ConsentController.init(action))
+    headers = Enum.uniq_by(headers ++ [{"host", "www.example.com"}], &elem(&1, 0))
+
+    ConsentController.call(
+      %{conn | req_headers: headers ++ conn.req_headers},
+      ConsentController.init(action)
+    )
   end
+
+  @decision %{"consent" => %{"analytics" => true}}
 
   defp body(conn), do: Jason.decode!(conn.resp_body)
 
@@ -104,6 +117,226 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
     test "answers 404 while the module is off" do
       PhoenixKit.Cache.put(:settings, "legal_enabled", "false")
       assert call(:post, :record, %{"consent" => %{"analytics" => true}}).status == 404
+    end
+  end
+
+  describe "the same-site rule" do
+    # What `Origin` says, when it names an origin, decides alone.
+    @origins [
+      {"no Origin", nil, :fetch_site},
+      {"Origin: null", "null", :fetch_site},
+      {"an unparsable Origin", "%%%not a url", :fetch_site},
+      {"an Origin with no host", "https://", :fetch_site},
+      {"the same host", "http://www.example.com", :allowed},
+      {"the same host, default port spelled out", "http://www.example.com:80", :allowed},
+      {"the same host, another port", "http://www.example.com:4444", :refused},
+      {"another host", "https://evil.example", :refused},
+      {"a sibling subdomain", "http://api.example.com", :refused},
+      {"a parent domain", "http://example.com", :refused}
+    ]
+
+    # Without one, the browser's own verdict does.
+    @fetch_sites [
+      {nil, :allowed},
+      {"same-origin", :allowed},
+      {"none", :allowed},
+      {"same-site", :refused},
+      {"cross-site", :refused}
+    ]
+
+    for {label, origin, by_origin} <- @origins, {fetch_site, by_fetch_site} <- @fetch_sites do
+      expected = if by_origin == :fetch_site, do: by_fetch_site, else: by_origin
+
+      test "#{label}, Sec-Fetch-Site #{inspect(fetch_site)}: #{expected}" do
+        headers =
+          Enum.reject(
+            [{"origin", unquote(origin)}, {"sec-fetch-site", unquote(fetch_site)}],
+            fn {_name, value} -> is_nil(value) end
+          )
+
+        for {method, action} <- [{:post, :record}, {:delete, :forget}] do
+          conn = call(method, action, @decision, headers)
+
+          case unquote(expected) do
+            :allowed ->
+              assert conn.status == 200
+
+            :refused ->
+              assert conn.status == 403
+              assert body(conn) == %{"error" => "cross-site request"}
+              refute Map.has_key?(conn.resp_cookies, "pk_consent")
+          end
+        end
+      end
+    end
+
+    test "host and port are compared against the Host header, default ports dropped" do
+      for {origin, host, status} <- [
+            # Development: the port is part of both.
+            {"http://localhost:4010", "localhost:4010", 200},
+            {"http://localhost:4011", "localhost:4010", 403},
+            {"http://localhost", "localhost:4010", 403},
+            # TLS ended at a proxy: https outside, a bare Host inside.
+            {"https://app.example", "app.example", 200},
+            {"https://app.example", "app.example:443", 200},
+            {"https://app.example:443", "app.example", 200},
+            # Cookies ignore the port; an origin does not.
+            {"https://app.example:4444", "app.example", 403},
+            {"https://app.example", "app.example:4444", 403},
+            {"https://APP.example", "app.EXAMPLE", 200},
+            {"http://[::1]:4000", "[::1]:4000", 200},
+            {"http://[::1]:4001", "[::1]:4000", 403}
+          ] do
+        conn = call(:post, :record, @decision, [{"host", host}, {"origin", origin}])
+        assert conn.status == status, "Origin #{origin}, Host #{host}"
+      end
+    end
+
+    test "conn.port is not consulted when there is a Host header" do
+      # Behind a proxy the endpoint listens on its own port.
+      conn =
+        call(
+          :post,
+          :record,
+          @decision,
+          [{"host", "app.example"}, {"origin", "https://app.example"}],
+          %{port: 4000}
+        )
+
+      assert conn.status == 200
+    end
+
+    test "without a Host header (HTTP/2) the adapter's authority is used" do
+      request = %{conn(:post, "/phoenix_kit/api/consent", @decision) | secret_key_base: @secret}
+
+      send_from = fn fields ->
+        request
+        |> Map.merge(fields)
+        |> put_req_header("origin", "http://app.example:4000")
+        |> ConsentController.call(ConsentController.init(:record))
+      end
+
+      assert send_from.(%{host: "app.example", port: 4000}).status == 200
+      assert send_from.(%{host: "app.example", port: 80}).status == 403
+    end
+
+    test "the host a proxy forwarded is this site too" do
+      for {origin, forwarded, status} <- [
+            {"https://shop.example", "shop.example", 200},
+            {"https://shop.example", "other.example, shop.example", 200},
+            {"https://shop.example:8443", "shop.example:8443", 200},
+            {"https://shop.example:8443", "shop.example", 403},
+            {"https://evil.example", "shop.example", 403},
+            {"https://shop.example", "", 403}
+          ] do
+        conn =
+          call(:post, :record, @decision, [
+            {"host", "10.0.0.5:4000"},
+            {"origin", origin},
+            {"x-forwarded-host", forwarded}
+          ])
+
+        assert conn.status == status, "Origin #{origin}, X-Forwarded-Host #{inspect(forwarded)}"
+      end
+    end
+
+    test "so is the configured site_url" do
+      for {site_url, origin, status} <- [
+            {"https://shop.example", "https://shop.example", 200},
+            {"https://shop.example/", "https://shop.example:443", 200},
+            {"https://shop.example:8443/path", "https://shop.example:8443", 200},
+            {"https://shop.example", "https://shop.example:8443", 403},
+            {"https://shop.example", "https://evil.example", 403},
+            {"https://shop.example", "https://www.shop.example", 403},
+            # Another scheme is another origin.
+            {"https://shop.example", "http://shop.example", 403},
+            {"", "https://shop.example", 403},
+            {"not a url", "https://shop.example", 403},
+            {nil, "https://shop.example", 403}
+          ] do
+        PhoenixKit.Cache.put(:settings, "site_url", site_url)
+
+        conn =
+          call(:post, :record, @decision, [{"host", "10.0.0.5:4000"}, {"origin", origin}])
+
+        assert conn.status == status, "site_url #{inspect(site_url)}, Origin #{origin}"
+      end
+    end
+  end
+
+  describe "without the endpoint's secret" do
+    test "a decision cannot be signed: 503, and no cookie" do
+      conn = call(:post, :record, @decision, [], %{secret_key_base: nil})
+
+      assert conn.status == 503
+      assert body(conn) == %{"decided" => false}
+      refute Map.has_key?(conn.resp_cookies, "pk_consent")
+    end
+  end
+
+  describe "the rate limit" do
+    setup do
+      # Core's limiter, started the way core's supervisor starts it.
+      start_supervised!(PhoenixKit.Users.RateLimiter.Backend)
+      :ok
+    end
+
+    defp from(address, method, action, params) do
+      call(method, action, params, [], %{remote_ip: address})
+    end
+
+    test "the 21st write in a minute from one address is refused, and sets nothing" do
+      address = {203, 0, 113, 21}
+
+      for n <- 1..20 do
+        # A different decision each time, so each is a real write.
+        conn = from(address, :post, :record, %{"consent" => %{"analytics" => rem(n, 2) == 0}})
+        assert conn.status == 200, "write #{n}"
+      end
+
+      conn = from(address, :post, :record, @decision)
+
+      assert conn.status == 429
+      assert body(conn) == %{"error" => "too many requests"}
+      refute Map.has_key?(conn.resp_cookies, "pk_consent")
+
+      # Another visitor is not held back by this one.
+      assert from({203, 0, 113, 22}, :post, :record, @decision).status == 200
+    end
+
+    test "DELETE counts against the same limit" do
+      address = {203, 0, 113, 23}
+
+      for _ <- 1..10, do: assert(from(address, :post, :record, @decision).status == 200)
+      for _ <- 1..10, do: assert(from(address, :delete, :forget, %{}).status == 200)
+
+      refused = from(address, :delete, :forget, %{})
+      assert refused.status == 429
+      refute Map.has_key?(refused.resp_cookies, "pk_consent")
+
+      assert from(address, :post, :record, @decision).status == 429
+    end
+
+    test "reads are not limited" do
+      address = {203, 0, 113, 24}
+      for _ <- 1..25, do: assert(from(address, :get, :show, %{}).status == 200)
+    end
+
+    test "an IPv6 client rotating inside its /64 shares one bucket" do
+      # Core gained `IpAddress.network/1` in 2.27; on an older core the pin
+      # still admits, each address is its own bucket and this cannot hold.
+      if function_exported?(PhoenixKit.Utils.IpAddress, :network, 1) do
+        for n <- 1..20 do
+          address = {0x2A0D, 0x3344, 0x6A, 0xC310, 0, 0, 0, n}
+          assert from(address, :post, :record, @decision).status == 200
+        end
+
+        same_network = {0x2A0D, 0x3344, 0x6A, 0xC310, 0xFFFF, 0, 0, 1}
+        assert from(same_network, :post, :record, @decision).status == 429
+
+        other_network = {0x2A0D, 0x3344, 0x6A, 0xC311, 0, 0, 0, 1}
+        assert from(other_network, :post, :record, @decision).status == 200
+      end
     end
   end
 

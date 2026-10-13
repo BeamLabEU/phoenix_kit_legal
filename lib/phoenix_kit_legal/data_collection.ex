@@ -43,11 +43,12 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
 
   Text is the declaring module's, already translated for the current locale.
   A declaration that is not a map with a `key` and a `title` is dropped; a
-  module whose `data_collection/0` raises declares nothing.
+  module whose `data_collection/0` raises declares nothing, and a warning
+  naming it is logged.
 
   ## What is shown
 
-  Everything active is shown by default. The operator may untick an entry
+  Everything active whose mode is not `:off` is shown by default. The operator may untick an entry
   (`hide/1`), which takes it out of the banner and the generated policy —
   and the settings page then says, next to it, that something being collected
   is not being disclosed. That choice is the operator's to make; hiding it
@@ -55,6 +56,8 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   """
 
   use Gettext, backend: PhoenixKit.Modules.Legal.Gettext
+
+  require Logger
 
   alias PhoenixKit.ModuleRegistry
   alias PhoenixKit.Modules.Legal
@@ -64,6 +67,10 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   @fingerprint_key "legal_policy_collection_fingerprint"
   @categories ~w(necessary analytics marketing preferences)
   @modes [:always, :consent, :unless_objected, :off]
+  @fetch_timeout 5_000
+  # The language the fingerprint is taken in — any one would do, as long as
+  # it is always the same one.
+  @fingerprint_language "en"
 
   @type entry :: %{
           key: String.t(),
@@ -96,24 +103,72 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
     |> Enum.sort_by(&{category_rank(&1.category), &1.module, &1.key})
   end
 
-  @doc "The declarations in `language`, whatever the caller's own locale is."
+  @doc """
+  The declarations in `language`, whatever the caller's own locale is.
+
+  Raises when they cannot be gathered; `fetch_declared/2` is the same
+  without raising.
+  """
   @spec declared(String.t()) :: [entry()]
   def declared(language) when is_binary(language) do
-    previous = Gettext.get_locale()
-    Gettext.put_locale(language)
+    case fetch_declared(language) do
+      {:ok, entries} ->
+        entries
 
-    try do
-      declared()
-    after
-      Gettext.put_locale(previous)
+      {:error, reason} ->
+        raise "could not gather the data collection declarations in #{inspect(language)}: " <>
+                inspect(reason)
     end
   end
 
-  @doc "What the banner and the policy show: active and not hidden by the operator."
+  @doc """
+  The declarations in `language`, or why they could not be gathered.
+
+  They are evaluated in a process of their own. A locale set for one Gettext
+  backend (core sets one for `PhoenixKitWeb.Gettext` on every admin page)
+  wins over the global one, and the caller cannot know which backends the
+  declaring modules use — so rather than changing the caller's locale, the
+  declarations run where the global locale is the only one there is.
+
+  ## Options
+
+    * `:modules` — the modules to ask (default: every enabled module)
+    * `:timeout` — milliseconds to wait (default #{@fetch_timeout})
+  """
+  @spec fetch_declared(String.t(), keyword()) :: {:ok, [entry()]} | {:error, term()}
+  def fetch_declared(language, opts \\ []) when is_binary(language) and is_list(opts) do
+    modules = Keyword.get_lazy(opts, :modules, &enabled_modules/0)
+    timeout = Keyword.get(opts, :timeout, @fetch_timeout)
+
+    task =
+      Task.async(fn ->
+        # The task is linked to the caller, so it answers with a value
+        # whatever happens instead of taking the caller down with it.
+        try do
+          Gettext.put_locale(language)
+          {:ok, collect(modules)}
+        rescue
+          error -> {:error, error}
+        catch
+          kind, reason -> {:error, {kind, reason}}
+        end
+      end)
+
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      {:exit, reason} -> {:error, reason}
+      nil -> {:error, :timeout}
+    end
+  end
+
+  @doc """
+  What the banner and the policy show: active, collected in some way (a mode
+  other than `:off`) and not hidden by the operator.
+  """
   @spec listed([entry()]) :: [entry()]
   def listed(entries \\ declared()) do
     hidden = hidden_keys()
-    Enum.filter(entries, &(&1.active and &1.key not in hidden))
+    Enum.filter(entries, &(&1.active and &1.mode != :off and &1.key not in hidden))
   end
 
   @doc "Listed entries grouped by consent category, every category present."
@@ -139,19 +194,19 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   end
 
   @doc "Takes an entry out of the banner and the policy."
-  @spec hide(String.t()) :: {:ok, term()} | {:error, term()}
-  def hide(key) when is_binary(key), do: put_hidden(Enum.uniq([key | hidden_keys()]))
+  @spec hide(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def hide(key, opts \\ []) when is_binary(key),
+    do: put_hidden(Enum.uniq([key | hidden_keys()]), opts)
 
   @doc "Puts an entry back."
-  @spec show(String.t()) :: {:ok, term()} | {:error, term()}
-  def show(key) when is_binary(key), do: put_hidden(List.delete(hidden_keys(), key))
+  @spec show(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def show(key, opts \\ []) when is_binary(key),
+    do: put_hidden(List.delete(hidden_keys(), key), opts)
 
-  defp put_hidden(keys) do
-    Settings.update_json_setting_with_module(
-      @hidden_key,
-      %{"items" => Enum.sort(keys)},
-      Legal.module_key()
-    )
+  # `opts` say who made the change (`:actor_uuid`, `:source`) in the
+  # settings history.
+  defp put_hidden(keys, opts) do
+    Legal.put_setting(:json, @hidden_key, %{"items" => Enum.sort(keys)}, opts)
   end
 
   @doc """
@@ -186,36 +241,65 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   def basis_label(_mode), do: gettext("Our legitimate interest")
 
   @doc """
-  A short hash of what is listed — the same until what the site tells
-  visitors would read differently.
+  A short hash of what the policy prints about the listed entries: what is
+  collected and how (`key`, `mode`, `category`, `data`, `retention`) and what
+  is stored on the device (each item's `name`, `kind` and `duration`). It
+  changes when any of those does, and not when a title or a description is
+  reworded.
+
+  Some of that is translated text, so the same list hashes differently in
+  two languages. `fingerprint/0` always takes it in one.
   """
   @spec fingerprint([entry()]) :: String.t()
-  def fingerprint(entries \\ listed()) do
+  def fingerprint(entries) when is_list(entries) do
     entries
-    |> Enum.map(
-      &{&1.key, &1.mode, &1.category, &1.retention, Enum.map(&1.storage, fn s -> s.name end)}
-    )
+    |> Enum.map(fn entry ->
+      {entry.key, entry.mode, entry.category, entry.retention, entry.data,
+       Enum.map(entry.storage, &{&1.name, &1.kind, &1.duration})}
+    end)
     |> :erlang.term_to_binary()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
     |> binary_part(0, 16)
   end
 
+  @doc """
+  The fingerprint of what is listed right now — the same whoever is looking,
+  in whatever language. Raises when the declarations cannot be gathered.
+  """
+  @spec fingerprint() :: String.t()
+  def fingerprint, do: @fingerprint_language |> declared() |> listed() |> fingerprint()
+
   @doc "Remembers what the cookie policy was generated from."
-  @spec remember_generated() :: {:ok, term()} | {:error, term()}
-  def remember_generated do
-    Settings.update_setting_with_module(@fingerprint_key, fingerprint(), Legal.module_key())
+  @spec remember_generated(keyword()) :: {:ok, term()} | {:error, term()}
+  def remember_generated(opts \\ []) do
+    with {:ok, entries} <- fetch_declared(@fingerprint_language) do
+      Legal.put_setting(:string, @fingerprint_key, entries |> listed() |> fingerprint(), opts)
+    end
   end
 
   @doc """
   Whether what the site collects has changed since the cookie policy was
-  generated. `false` when no policy was ever generated from a list.
+  generated. `false` when no policy was ever generated from a list, and when
+  the list cannot be gathered to compare.
   """
   @spec policy_outdated?() :: boolean()
   def policy_outdated? do
-    case Settings.get_setting_cached(@fingerprint_key, nil) do
-      stored when is_binary(stored) and stored != "" -> stored != fingerprint()
-      _ -> false
+    with stored when is_binary(stored) and stored != "" <-
+           Settings.get_setting_cached(@fingerprint_key, nil),
+         {:ok, entries} <- fetch_declared(@fingerprint_language) do
+      stored != entries |> listed() |> fingerprint()
+    else
+      {:error, reason} ->
+        Logger.warning(
+          "[Legal] could not compare the cookie policy with what is declared: " <>
+            inspect(reason)
+        )
+
+        false
+
+      _ ->
+        false
     end
   end
 
@@ -240,9 +324,20 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
       []
     end
   rescue
-    _ -> []
+    error -> undeclared(module, inspect(error.__struct__))
   catch
-    :exit, _ -> []
+    :exit, _ -> undeclared(module, "exit")
+  end
+
+  # One module's broken declaration must not take the banner or the policy
+  # down, but it must not disappear quietly either. The module is named; the
+  # error's own text and stacktrace are left out, as they may hold anything.
+  defp undeclared(module, why) do
+    Logger.warning(
+      "[Legal] #{inspect(module)}.data_collection/0 failed (#{why}); it declares nothing"
+    )
+
+    []
   end
 
   defp normalize(%{} = raw, module_key) do
