@@ -58,6 +58,29 @@ defmodule PhoenixKit.Modules.Legal.CookieConsentTest do
     assert html =~ "pk-consent-root"
   end
 
+  describe "what the banner script needs to report a decision" do
+    setup do
+      PhoenixKit.Cache.put(:settings, "legal_consent_cookie_days", "90")
+      PhoenixKit.Cache.put(:settings, "legal_consent_reload_on_withdrawal", "false")
+      PhoenixKit.Cache.put(:settings, "legal_hidden_collection", %{"items" => []})
+      :ok
+    end
+
+    test "is on the root element" do
+      html = render(phoenix_kit_current_scope: nil)
+
+      assert html =~ ~s(data-consent-endpoint="/phoenix_kit/api/consent")
+      assert html =~ ~s(data-cookie-name="pk_consent")
+      assert html =~ ~s(data-cookie-days="90")
+      assert html =~ ~s(data-reload-on-withdrawal="false")
+    end
+
+    test "a category with nothing declared under it says nothing about what it covers" do
+      # No module registry runs in this suite, so nothing is declared.
+      refute render(phoenix_kit_current_scope: nil) =~ "data-covers"
+    end
+  end
+
   test "renders full widget for unknown struct (scope ignored, no crash)" do
     html = render(phoenix_kit_current_scope: %URI{host: "example.com"})
     assert html =~ "pk-consent-root"

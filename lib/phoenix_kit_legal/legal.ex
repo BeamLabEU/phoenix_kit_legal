@@ -53,7 +53,9 @@ defmodule PhoenixKit.Modules.Legal do
             ]}
 
   alias PhoenixKit.Dashboard.Tab
+  alias PhoenixKit.Modules.Legal.Consent
   alias PhoenixKit.Modules.Legal.ConsentLog
+  alias PhoenixKit.Modules.Legal.DataCollection
   alias PhoenixKit.Modules.Legal.LegalFramework
   alias PhoenixKit.Modules.Legal.PageType
   alias PhoenixKit.Modules.Legal.TemplateGenerator
@@ -638,7 +640,13 @@ defmodule PhoenixKit.Modules.Legal do
       privacy_policy_url: privacy_policy_url,
       legal_links: legal_links,
       legal_index_url: Routes.path("/legal", locale: :none),
+      consent_endpoint: consent_endpoint(),
+      cookie_name: Consent.cookie_name(),
+      cookie_days: Consent.cookie_days(),
+      reload_on_withdrawal: Consent.reload_on_withdrawal?(),
+      purposes: consent_purposes(),
       translations: %{
+        covers: gettext("Covers:"),
         banner_title: gettext("We value your privacy"),
         banner_message:
           gettext("We use cookies to enhance your browsing experience and analyze our traffic."),
@@ -677,6 +685,26 @@ defmodule PhoenixKit.Modules.Legal do
         }
       }
     }
+  end
+
+  @doc """
+  The path of the consent endpoint (`PhoenixKit.Modules.Legal.Routes`), under
+  PhoenixKit's URL prefix and without a locale: it is an API, not a page.
+  """
+  @spec consent_endpoint() :: String.t()
+  def consent_endpoint, do: Routes.path("/api/consent", locale: :none)
+
+  @doc """
+  What each consent category covers on this site, as the modules declare it:
+  a map of category to the titles of what is collected under it. Shown under
+  each toggle of the preferences dialog.
+  """
+  @spec consent_purposes() :: %{String.t() => [String.t()]}
+  def consent_purposes do
+    DataCollection.by_category()
+    |> Map.new(fn {category, entries} -> {category, Enum.map(entries, & &1.title)} end)
+  rescue
+    _ -> %{}
   end
 
   @doc """
@@ -870,6 +898,82 @@ defmodule PhoenixKit.Modules.Legal do
   # dev_docs/reports/2026-08-10-consent-logs-extraction.md.
   def migration_module, do: PhoenixKit.Modules.Legal.Migrations
 
+  @impl PhoenixKit.Module
+  @doc """
+  The consent manager, folded into the host's `phoenix_kit_modules.js`.
+
+  Core's own bundle carries an older copy of this script, which loads first
+  on any host that has not imported this package's file by hand, and which
+  does not report decisions to the server. Shipping the current one through
+  the bundle compiler is what puts it on every host; it retires the older
+  copy when it finds one (see the top of the script).
+  """
+  def js_sources do
+    [
+      %{
+        app: :phoenix_kit_legal,
+        file: "static/assets/phoenix_kit_consent.js",
+        global: "PhoenixKitLegalHooks"
+      }
+    ]
+  end
+
+  @impl PhoenixKit.Module
+  # The consent endpoint only. Legal pages are Publishing's to serve — see
+  # the note on `reserved_route_prefixes/0` below.
+  def route_module, do: PhoenixKit.Modules.Legal.Routes
+
+  @doc """
+  What this module itself puts on a visitor's device and keeps about them —
+  its entry in `PhoenixKit.Modules.Legal.DataCollection`.
+  """
+  @spec data_collection() :: [map()]
+  def data_collection do
+    days = Consent.cookie_days()
+
+    [
+      %{
+        key: "legal.consent",
+        title: gettext("Your privacy choices"),
+        description:
+          gettext(
+            "Remembers what you agreed to and what you refused, so we do not ask on every page and can show that we asked."
+          ),
+        category: "necessary",
+        mode: :always,
+        active: consent_widget_enabled?(),
+        data: consent_record_data(),
+        retention: nil,
+        storage: [
+          %{
+            name: Consent.cookie_name(),
+            kind: "cookie",
+            duration: ngettext("%{count} day", "%{count} days", days, count: days),
+            purpose: gettext("Stores your privacy choices")
+          },
+          %{
+            name: "pk_consent",
+            kind: "localStorage",
+            duration: gettext("Until cleared"),
+            purpose: gettext("Stores your privacy choices for this browser")
+          }
+        ]
+      }
+    ]
+  end
+
+  defp consent_record_data do
+    [
+      Consent.log_enabled?() &&
+        gettext("The choices you made, when, and under which policy version"),
+      Consent.log_enabled?() && gettext("Your account, when you are signed in"),
+      Consent.log_enabled?() && Consent.log_ip?() && gettext("Your IP address"),
+      Consent.log_enabled?() && Consent.log_user_agent?() &&
+        gettext("A hash of your browser's User-Agent")
+    ]
+    |> Enum.filter(&is_binary/1)
+  end
+
   # NOTE: Legal deliberately does NOT implement
   # `PhoenixKit.Module.reserved_route_prefixes/0`.
   #
@@ -915,8 +1019,10 @@ defmodule PhoenixKit.Modules.Legal do
 
     with {:ok, _} <- ensure_legal_blog(),
          {:ok, page_config} <- get_page_config(page_type),
-         {:ok, content} <- render_template(page_config.template, language) do
-      create_or_update_legal_post(page_config, content, language, scope)
+         {:ok, content} <- render_template(page_config.template, language),
+         {:ok, post} <- create_or_update_legal_post(page_config, content, language, scope) do
+      remember_collection(page_type)
+      {:ok, post}
     end
   end
 
@@ -1212,11 +1318,23 @@ defmodule PhoenixKit.Modules.Legal do
   end
 
   defp render_template(template_name, language) do
-    context = build_template_context()
+    context = build_template_context(language)
     TemplateGenerator.render(template_name, context, language)
   end
 
-  defp build_template_context do
+  # The cookie policy is written from what the modules declare; remembering
+  # that list is what lets the settings page say when the policy has fallen
+  # behind it. A failed write only loses that hint.
+  defp remember_collection("cookie-policy") do
+    DataCollection.remember_generated()
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  defp remember_collection(_page_type), do: :ok
+
+  defp build_template_context(language) do
     company = get_company_info()
     dpo = get_dpo_contact()
     frameworks = get_selected_frameworks()
@@ -1239,8 +1357,27 @@ defmodule PhoenixKit.Modules.Legal do
       dpo_phone: dpo["phone"] || "",
       dpo_address: dpo["address"] || "",
       frameworks: frameworks,
-      effective_date: Date.utc_today() |> Date.to_string()
+      effective_date: Date.utc_today() |> Date.to_string(),
+      data_collection: template_collection(language)
     }
+  end
+
+  # What the policy lists, by consent category, in the page's language. Each
+  # entry gains the words for its legal ground, so a template needs no logic.
+  defp template_collection(language) do
+    language
+    |> DataCollection.declared()
+    |> DataCollection.listed()
+    |> Enum.map(&Map.put(&1, :basis, basis_in(language, &1.mode)))
+    |> DataCollection.by_category()
+  rescue
+    _ -> DataCollection.by_category([])
+  end
+
+  defp basis_in(language, mode) do
+    Gettext.with_locale(PhoenixKit.Modules.Legal.Gettext, language, fn ->
+      DataCollection.basis_label(mode)
+    end)
   end
 
   defp format_company_address(company) do

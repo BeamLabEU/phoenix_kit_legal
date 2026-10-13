@@ -29,6 +29,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
   use Gettext, backend: PhoenixKit.Modules.Legal.Gettext
 
   alias PhoenixKit.Modules.Legal
+  alias PhoenixKit.Modules.Legal.Consent
   alias PhoenixKit.Users.Auth.Scope
 
   @opt_in_frameworks ~w(gdpr uk_gdpr lgpd pipeda)
@@ -121,6 +122,10 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
       assigns
       |> assign(:categories, translated_categories())
       |> assign(:show_icon, show_icon)
+      |> assign(:purposes, Legal.consent_purposes())
+      |> assign(:consent_endpoint, Legal.consent_endpoint())
+      |> assign(:cookie_days, Consent.cookie_days())
+      |> assign(:reload_on_withdrawal, Consent.reload_on_withdrawal?())
 
     ~H"""
     <div
@@ -132,6 +137,10 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
       data-google-consent-mode={to_string(@google_consent_mode)}
       data-icon-position={@icon_position}
       data-show-icon={to_string(@show_icon)}
+      data-consent-endpoint={@consent_endpoint}
+      data-cookie-name={Consent.cookie_name()}
+      data-cookie-days={@cookie_days}
+      data-reload-on-withdrawal={to_string(@reload_on_withdrawal)}
       class={["pk-consent-widget", @class]}
     >
       <%!-- Custom Styles using daisyUI CSS variables --%>
@@ -388,6 +397,14 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
                         </div>
                         <p class="text-xs text-base-content/70 mt-1 leading-relaxed">
                           {category.description}
+                        </p>
+                        <p
+                          :if={Map.get(@purposes, category.id, []) != []}
+                          class="text-xs text-base-content/70 mt-1 leading-relaxed"
+                          data-covers={category.id}
+                        >
+                          <span class="font-medium">{gettext("Covers:")}</span>
+                          {Enum.join(@purposes[category.id], ", ")}
                         </p>
                       </div>
                     </div>

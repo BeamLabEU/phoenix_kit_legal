@@ -23,6 +23,8 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
             ]}
 
   alias PhoenixKit.Modules.Legal
+  alias PhoenixKit.Modules.Legal.Consent
+  alias PhoenixKit.Modules.Legal.DataCollection
   alias PhoenixKit.Settings
   alias PhoenixKit.Utils.Routes
 
@@ -76,6 +78,8 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
       |> assign(:enabled_languages, publishing_module_languages())
       |> assign(:selected_generation_language, default_language())
       |> assign(:legal_diagnosis, Legal.diagnose_legal_pages())
+      |> assign_consent_record()
+      |> assign_collection()
 
     {:ok, socket}
   end
@@ -173,6 +177,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
          |> assign(:generating, false)
          |> assign(:generated_pages, Legal.list_generated_pages())
          |> assign(:unpublished_pages, Legal.get_unpublished_required_pages())
+         |> assign_collection()
          |> put_flash(:info, gettext("Page generated successfully"))}
 
       {:error, reason} ->
@@ -226,6 +231,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
      |> assign(:generating, false)
      |> assign(:generated_pages, Legal.list_generated_pages())
      |> assign(:unpublished_pages, Legal.get_unpublished_required_pages())
+     |> assign_collection()
      |> put_flash(:info, gettext("Generated %{count} pages", count: success_count))}
   end
 
@@ -271,6 +277,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
            socket
            |> assign(:consent_widget_enabled, false)
            |> assign(:show_consent_icon, false)
+           |> assign_collection()
            |> put_flash(:info, gettext("Cookie consent widget disabled"))}
 
         {:error, _} ->
@@ -285,6 +292,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
            socket
            |> assign(:consent_widget_enabled, true)
            |> assign(:show_consent_icon, show_icon)
+           |> assign_collection()
            |> put_flash(:info, gettext("Cookie consent widget enabled"))}
 
         {:error, _} ->
@@ -299,6 +307,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
     hide_for_auth = params["hide_for_authenticated"] == "true"
 
     with {:ok, _} <- Legal.update_consent_mode(consent_mode),
+         :ok <- Consent.update_settings(consent_record_params(params)),
          {:ok, _} <- Legal.update_hide_for_authenticated(hide_for_auth),
          {:ok, _} <- Legal.update_icon_position(params["icon_position"] || "bottom-right"),
          {:ok, _} <- update_google_consent_mode(params["google_consent_mode"]) do
@@ -312,12 +321,80 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
        |> assign(:icon_position, params["icon_position"] || "bottom-right")
        |> assign(:google_consent_mode, params["google_consent_mode"] == "true")
        |> assign(:show_consent_icon, show_icon)
+       |> assign_consent_record()
+       |> assign_collection()
        |> put_flash(:info, gettext("Consent widget settings saved"))}
     else
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Failed to save settings"))}
     end
   end
+
+  # ===================================
+  # WHAT THE SITE COLLECTS
+  # ===================================
+
+  @impl true
+  def handle_event("toggle_collection", %{"key" => key}, socket) do
+    result =
+      if key in socket.assigns.hidden_collection,
+        do: DataCollection.show(key),
+        else: DataCollection.hide(key)
+
+    case result do
+      {:ok, _} ->
+        {:noreply, assign_collection(socket)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Failed to update setting"))}
+    end
+  end
+
+  defp assign_consent_record(socket) do
+    assign(socket, :consent_record, %{
+      log: Consent.log_enabled?(),
+      log_ip: Consent.log_ip?(),
+      log_user_agent: Consent.log_user_agent?(),
+      reload_on_withdrawal: Consent.reload_on_withdrawal?(),
+      cookie_days: Consent.cookie_days(),
+      max_days: Consent.day_bounds().max
+    })
+  end
+
+  defp assign_collection(socket) do
+    hidden = DataCollection.hidden_keys()
+    widget? = Legal.consent_widget_enabled?()
+
+    entries =
+      Enum.map(DataCollection.declared(), fn entry ->
+        Map.put(
+          entry,
+          :warnings,
+          DataCollection.warnings(entry, hidden: hidden, widget_enabled: widget?)
+        )
+      end)
+
+    socket
+    |> assign(:collection, entries)
+    |> assign(:hidden_collection, hidden)
+    |> assign(:policy_outdated, DataCollection.policy_outdated?())
+  end
+
+  defp consent_record_params(params) do
+    %{
+      log: params["consent_log"] == "true",
+      log_ip: params["consent_log_ip"] == "true",
+      log_user_agent: params["consent_log_user_agent"] == "true",
+      reload_on_withdrawal: params["consent_reload_on_withdrawal"] == "true",
+      cookie_days: params["consent_cookie_days"]
+    }
+  end
+
+  defp category_label("necessary"), do: gettext("Essential")
+  defp category_label("analytics"), do: gettext("Analytics")
+  defp category_label("marketing"), do: gettext("Marketing")
+  defp category_label("preferences"), do: gettext("Preferences")
+  defp category_label(other), do: other
 
   defp update_google_consent_mode("true"), do: Legal.enable_google_consent_mode()
   defp update_google_consent_mode(_), do: Legal.disable_google_consent_mode()

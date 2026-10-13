@@ -1,5 +1,5 @@
 <%!-- Cookie Policy Template --%>
-<%!-- Variables: company_name, company_address, company_website, dpo_email, frameworks, effective_date --%>
+<%!-- Variables: company_name, company_address, company_website, dpo_email, frameworks, effective_date, data_collection --%>
 
 > **DRAFT DOCUMENT - LEGAL REVIEW REQUIRED**
 >
@@ -34,35 +34,81 @@ These cookies are essential for the website to function properly. They enable co
 | session_id | User session management | Session |
 | csrf_token | Security - prevents cross-site request forgery | Session |
 | remember_token | Persistent login functionality | 14 days |
+<%= for entry <- @data_collection["necessary"], item <- entry.storage do %>| <%= item.name %> (<%= item.kind %>) | <%= item.purpose %> | <%= item.duration %> |
+<% end %>
+### 3.2 Performance/Analytics
 
-### 3.2 Performance/Analytics Cookies
+These help us understand how visitors use our website.
 
-These cookies help us understand how visitors interact with our website by collecting and reporting information anonymously.
+<%= if @data_collection["analytics"] == [] do %>
+We do not currently use cookies or similar technologies in this category.
 
-| Cookie Name | Purpose | Duration |
-|-------------|---------|----------|
-| _ga | Google Analytics - distinguishes users | 2 years |
-| _gid | Google Analytics - distinguishes users | 24 hours |
-| _gat | Google Analytics - throttles request rate | 1 minute |
+> **Draft note:** nothing on this site declares itself in this category. If you
+> load third-party tools here (an analytics or advertising script, an embedded
+> video), list what they store before publishing.
+<% else %>
+<%= if Enum.all?(@data_collection["analytics"], &(&1.storage == [])) do %>
+Nothing in this category is stored on your device. What we collect under it is listed in section 3.5 and is worked out on our servers.
+<% else %>
+| Name | Type | Purpose | Duration |
+|------|------|---------|----------|
+<%= for entry <- @data_collection["analytics"], item <- entry.storage do %>| <%= item.name %> | <%= item.kind %> | <%= item.purpose %> | <%= item.duration %> |
+<% end %><% end %>
+<% end %>
 
-### 3.3 Functionality/Preference Cookies
+### 3.3 Functionality/Preference
 
-These cookies enable enhanced functionality and personalization, such as remembering your preferences and settings.
+These enable enhanced functionality and personalization, such as remembering your preferences and settings.
 
-| Cookie Name | Purpose | Duration |
-|-------------|---------|----------|
-| language | Remembers language preference | 1 year |
-| theme | Remembers theme preference | 1 year |
-| timezone | Remembers timezone setting | 1 year |
+<%= if @data_collection["preferences"] == [] do %>
+We do not currently use cookies or similar technologies in this category.
 
-### 3.4 Marketing/Targeting Cookies
+> **Draft note:** nothing on this site declares itself in this category. If you
+> load third-party tools here (an analytics or advertising script, an embedded
+> video), list what they store before publishing.
+<% else %>
+<%= if Enum.all?(@data_collection["preferences"], &(&1.storage == [])) do %>
+Nothing in this category is stored on your device. What we collect under it is listed in section 3.5 and is worked out on our servers.
+<% else %>
+| Name | Type | Purpose | Duration |
+|------|------|---------|----------|
+<%= for entry <- @data_collection["preferences"], item <- entry.storage do %>| <%= item.name %> | <%= item.kind %> | <%= item.purpose %> | <%= item.duration %> |
+<% end %><% end %>
+<% end %>
 
-These cookies are used to track visitors across websites for advertising purposes. They help display relevant and personalized ads.
+### 3.4 Marketing/Targeting
 
-| Cookie Name | Purpose | Duration |
-|-------------|---------|----------|
-| _fbp | Facebook Pixel - tracks conversions | 3 months |
-| _gcl_au | Google Ads - conversion tracking | 3 months |
+These are used to measure and personalize advertising.
+
+<%= if @data_collection["marketing"] == [] do %>
+We do not currently use cookies or similar technologies in this category.
+
+> **Draft note:** nothing on this site declares itself in this category. If you
+> load third-party tools here (an analytics or advertising script, an embedded
+> video), list what they store before publishing.
+<% else %>
+<%= if Enum.all?(@data_collection["marketing"], &(&1.storage == [])) do %>
+Nothing in this category is stored on your device. What we collect under it is listed in section 3.5 and is worked out on our servers.
+<% else %>
+| Name | Type | Purpose | Duration |
+|------|------|---------|----------|
+<%= for entry <- @data_collection["marketing"], item <- entry.storage do %>| <%= item.name %> | <%= item.kind %> | <%= item.purpose %> | <%= item.duration %> |
+<% end %><% end %>
+<% end %>
+
+### 3.5 What We Collect and Why
+
+<%= for {_category, entries} <- @data_collection, entry <- entries do %>
+#### <%= entry.title %>
+
+<%= entry.description %>
+
+<%= if entry.data != [] do %><%= for item <- entry.data do %>- <%= item %>
+<% end %><% end %>
+**Legal basis:** <%= entry.basis %><%= if entry.retention do %>
+
+**Kept for:** <%= entry.retention %><% end %>
+<% end %>
 
 ## 4. How to Manage Cookies
 
