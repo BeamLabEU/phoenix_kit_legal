@@ -112,7 +112,15 @@ integration_excludes =
     [:integration]
   end
 
-ExUnit.start(exclude: i18n_excludes ++ integration_excludes)
+# The builds-alone test needs `PhoenixKit.TestSupport.ModuleChainCheck`, which
+# ships in the first core release after 2.64.1; against an older core it is
+# excluded.
+chain_check_exclude =
+  if Code.ensure_loaded?(PhoenixKit.TestSupport.ModuleChainCheck),
+    do: [],
+    else: [:requires_module_chain_check]
+
+ExUnit.start(exclude: chain_check_exclude ++ i18n_excludes ++ integration_excludes)
 
 # Start the PhoenixKit settings cache so Settings-backed helpers (e.g.
 # Legal.hide_for_authenticated?/0) resolve cleanly without a full Ecto/Repo
