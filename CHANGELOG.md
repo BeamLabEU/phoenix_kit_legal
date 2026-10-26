@@ -386,6 +386,7 @@ Requires `phoenix_kit ~> 2.0`, unchanged from 0.2.0.
   `compile.phoenix_kit_css_sources.ex`.
 
 ### Added
+- **The module supplies the manifest of its 1 tables** (`expected_schema/0`, `PhoenixKit.Modules.Legal.ExpectedSchema`), so `mix phoenix_kit.repair` and `mix phoenix_kit.doctor` check and repair them again, now from the module's own chain instead of core's manifest. Generated from `PhoenixKit.Modules.Legal.Migrations` by core's `dev_docs/squash/generate_module_manifest.exs`, never edited by hand. Core uses it from the first release after 2.64.1; before that nothing reads it. Repair is additive (it creates what is missing and reports the rest) and checks the tables only while the database is at the chain's current version. No migration.
 - `test/phoenix_kit_legal/css_sources_test.exs` — pins the deps/, path-dep, and
   umbrella layouts, and asserts `css_sources/0` never lists a directory the atom
   entry already covers.
