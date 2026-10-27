@@ -21,8 +21,8 @@ defmodule PhoenixKitLegal.CorePinConformanceTest do
 
   alias PhoenixKit.Modules.Legal
 
-  @must_admit ["2.0.0", "2.0.7", "2.1.0", "2.9.4"]
-  @must_reject ["1.7.189", "1.7.236", "1.9.4", "3.0.0"]
+  @must_admit ["2.65.0", "2.65.1", "2.99.4", "3.0.0", "3.9.9"]
+  @must_reject ["1.7.189", "1.7.236", "1.9.4", "2.64.9", "4.0.0"]
 
   test "the :phoenix_kit requirement admits every core 2.x and nothing else" do
     requirement = core_requirement()

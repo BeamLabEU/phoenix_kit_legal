@@ -67,7 +67,9 @@ defmodule PhoenixKitLegal.MixProject do
       # older core the route resolves to a module that exists nowhere —
       # UndefinedFunctionError, on every request the bundled JS makes. See
       # AGENTS.md, "Feature notes".
-      {:phoenix_kit, "~> 2.0"},
+      # Floor 2.65.0: the first core with the `file_references/0` and `expected_schema/0`
+      # callbacks this module implements (`@impl`). The ceiling is open through core 3.x.
+      {:phoenix_kit, ">= 2.65.0 and < 4.0.0"},
       # Build MDEx's Rust NIF from source on OTP versions it ships no
       # compatible precompiled NIF for — same escape hatch core's mix.exs
       # carries: MDEx's force_build requires rustler itself, not just

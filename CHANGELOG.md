@@ -349,6 +349,10 @@ Requires `phoenix_kit ~> 2.0`, unchanged from 0.2.0.
 
 ## Unreleased
 
+### Changed
+
+- **Core pin widened to `>= 2.65.0 and < 4.0.0`:** works with core 3.x (core 3.0 stops creating the module tables; this module's own chain builds its tables). The floor is the first core with the `file_references/0` and `expected_schema/0` callbacks, which now carry `@impl PhoenixKit.Module`.
+
 ### Fixed
 - **`css_sources/0` no longer emits the same directory twice.** On a normal Hex
   install the callback returned both `:phoenix_kit_legal` and a compile-time
