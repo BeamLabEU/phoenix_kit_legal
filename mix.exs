@@ -1,7 +1,7 @@
 defmodule PhoenixKitLegal.MixProject do
   use Mix.Project
 
-  @version "0.6.0"
+  @version "0.7.0"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_legal"
 
   def project do
@@ -77,7 +77,7 @@ defmodule PhoenixKitLegal.MixProject do
       {:rustler, ">= 0.0.0", optional: true},
 
       # Publishing module for storing generated legal pages as posts.
-      {:phoenix_kit_publishing, "~> 0.13"},
+      {:phoenix_kit_publishing, "~> 0.15"},
 
       # LiveView for admin settings page.
       {:phoenix_live_view, "~> 1.0"},
