@@ -347,7 +347,7 @@ Requires `phoenix_kit ~> 2.0`, unchanged from 0.2.0.
 - This module's migration coordinator conflicted with core's ownership of
   `phoenix_kit_consent_logs`. Resolved in 0.3.0 — see that entry.
 
-## 0.7.0 - 2026-11-13
+## 0.7.0 - 2026-10-27
 
 ### Changed
 
