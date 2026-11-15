@@ -463,20 +463,16 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
     end
 
     test "an IPv6 client rotating inside its /64 shares one bucket" do
-      # Core gained `IpAddress.network/1` in 2.27; on an older core the pin
-      # still admits, each address is its own bucket and this cannot hold.
-      if function_exported?(PhoenixKit.Utils.IpAddress, :network, 1) do
-        for n <- 1..20 do
-          address = {0x2A0D, 0x3344, 0x6A, 0xC310, 0, 0, 0, n}
-          assert from(address, :post, :record, @decision).status == 200
-        end
-
-        same_network = {0x2A0D, 0x3344, 0x6A, 0xC310, 0xFFFF, 0, 0, 1}
-        assert from(same_network, :post, :record, @decision).status == 429
-
-        other_network = {0x2A0D, 0x3344, 0x6A, 0xC311, 0, 0, 0, 1}
-        assert from(other_network, :post, :record, @decision).status == 200
+      for n <- 1..20 do
+        address = {0x2A0D, 0x3344, 0x6A, 0xC310, 0, 0, 0, n}
+        assert from(address, :post, :record, @decision).status == 200
       end
+
+      same_network = {0x2A0D, 0x3344, 0x6A, 0xC310, 0xFFFF, 0, 0, 1}
+      assert from(same_network, :post, :record, @decision).status == 429
+
+      other_network = {0x2A0D, 0x3344, 0x6A, 0xC311, 0, 0, 0, 1}
+      assert from(other_network, :post, :record, @decision).status == 200
     end
   end
 

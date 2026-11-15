@@ -5,15 +5,15 @@ defmodule PhoenixKitLegal.CorePinConformanceTest do
   Guards the `:phoenix_kit` requirement against being re-narrowed to a single
   core MINOR, and against a local path override reaching a commit.
 
-  The trap is the three-segment form: `~> 2.0.x` expands to
-  `>= 2.0.x and < 2.1.0`, so no 2.1 or later core satisfies it. The breakage
+  The trap is the three-segment form: `~> 3.5.0` expands to
+  `>= 3.5.0 and < 3.6.0`, so no 3.6 or later core satisfies it. The breakage
   lands on CONSUMERS, never here — a host depending on both this module and a
   newer core minor gets an unsolvable dependency set and `mix deps.get` fails
   outright, with no degraded mode. Nothing else in this repo's own test run
   would notice, which is why the check is a test rather than a convention.
 
-  Core 1.7 is deliberately excluded: core 2.0.0 squashed the migration chain to
-  a V135 floor and this module is verified only against that baseline.
+  The requirement is `>= 3.5.0 and < 4.0.0`: floor 3.5.0, ceiling open
+  through every core 3.x.
 
   Also pins that `version/0` stays single-sourced from `mix.exs`, so a release
   bump cannot leave the behaviour callback reporting a stale number.
@@ -21,10 +21,10 @@ defmodule PhoenixKitLegal.CorePinConformanceTest do
 
   alias PhoenixKit.Modules.Legal
 
-  @must_admit ["2.65.0", "2.65.1", "2.99.4", "3.0.0", "3.9.9"]
-  @must_reject ["1.7.189", "1.7.236", "1.9.4", "2.64.9", "4.0.0"]
+  @must_admit ["3.5.0", "3.5.1", "3.6.0", "3.9.9"]
+  @must_reject ["1.7.236", "2.0.0", "2.65.0", "2.99.4", "3.0.0", "3.4.0", "3.4.9", "4.0.0"]
 
-  test "the :phoenix_kit requirement admits every core 2.x and nothing else" do
+  test "the :phoenix_kit requirement admits every core >= 3.5.0 minor and nothing else" do
     requirement = core_requirement()
 
     assert match?({:ok, _parsed}, Version.parse_requirement(requirement)),
@@ -34,7 +34,8 @@ defmodule PhoenixKitLegal.CorePinConformanceTest do
       assert Version.match?(version, requirement),
              "`:phoenix_kit` requirement #{inspect(requirement)} rejects core #{version}. " <>
                "A pin that excludes a core minor breaks `mix deps.get` for every host " <>
-               "running this module alongside that core. Keep it a two-segment `~> 2.0`."
+               "running this module alongside that core. Keep the floor patch-precise " <>
+               "and the ceiling open (`>= 3.5.0 and < 4.0.0`), never a three-segment `~>`."
     end
 
     for version <- @must_reject do

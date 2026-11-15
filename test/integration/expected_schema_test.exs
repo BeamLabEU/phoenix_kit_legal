@@ -7,8 +7,7 @@ defmodule PhoenixKit.Modules.Legal.Integration.ExpectedSchemaTest do
   (`PhoenixKit.TestSupport.ModuleChainCheck.build_alone/4`), then
   `PhoenixKit.Migrations.Repair` runs against that schema with this module's
   manifest. Regenerate the manifest after any change to the chain; see the header
-  of `expected_schema.ex`. Excluded (`:requires_core_expected_schema`, see
-  `test_helper.exs`) against a core that lacks the callback.
+  of `expected_schema.ex`.
   """
   use ExUnit.Case, async: false
 
@@ -18,7 +17,6 @@ defmodule PhoenixKit.Modules.Legal.Integration.ExpectedSchemaTest do
   alias PhoenixKit.TestSupport.ModuleChainCheck
 
   @moduletag :integration
-  @moduletag :requires_core_expected_schema
   @moduletag timeout: :timer.minutes(3)
 
   @app :phoenix_kit_legal

@@ -556,7 +556,7 @@ when this package is absent; when it is installed, that controller delegates to
 does.
 
 That makes core a hard requirement: 1.7.227 is the first release that owns the
-route, and the `{:phoenix_kit, "~> 2.0"}` pin in `mix.exs` is above it. Core declares the route whenever this module is loaded, so on an older
+route, and the `{:phoenix_kit, ">= 3.5.0 and < 4.0.0"}` pin in `mix.exs` is above it. Core declares the route whenever this module is loaded, so on an older
 core the route resolves to a controller that no longer exists anywhere.
 
 ## Development

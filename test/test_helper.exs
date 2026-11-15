@@ -1,34 +1,9 @@
-require Logger
-
-# i18n tests require phoenix_kit with the `gettext_backend` API
-# (see BeamLabEU/phoenix_kit#522). Until that ships in a Hex release,
-# CI building against the published phoenix_kit lacks
-# `PhoenixKit.Dashboard.Tab.localized_label/1` and the assertions
-# would raise `UndefinedFunctionError`. Detect availability and
-# exclude those tests when the API is missing — they run automatically
-# the moment the consumer's `phoenix_kit` dep resolves to a release
-# that includes the API.
-i18n_excludes =
-  if Code.ensure_loaded?(PhoenixKit.Dashboard.Tab) and
-       function_exported?(PhoenixKit.Dashboard.Tab, :localized_label, 1) do
-    []
-  else
-    Logger.info(
-      "[test_helper] PhoenixKit.Dashboard.Tab.localized_label/1 not available — " <>
-        "i18n tests excluded. They will run automatically once `phoenix_kit` is " <>
-        "upgraded to a release that ships the gettext_backend API."
-    )
-
-    [:requires_phoenix_kit_i18n_api]
-  end
-
 # `:integration` tests exercise `Migrations.up/1`'s adoption-shape check
 # (test/phoenix_kit_legal/migrations/adoption_integration_test.exs)
 # against a real PostgreSQL database — that check reads live catalog
 # state (information_schema.columns, pg_indexes, pg_constraint) which no
 # pure-function test can stand in for. Excluded automatically when no
-# database is reachable, the same way the i18n gate above degrades
-# rather than fails — see AGENTS.md, "Testing".
+# database is reachable, rather than failing — see AGENTS.md, "Testing".
 repo_config = Application.get_env(:phoenix_kit_legal, PhoenixKit.Modules.Legal.Test.Repo, [])
 
 # Refuses outright, before anything attempts a connection, unless this is
@@ -112,15 +87,7 @@ integration_excludes =
     [:integration]
   end
 
-# The builds-alone test needs `PhoenixKit.TestSupport.ModuleChainCheck`, which
-# ships in the first core release after 2.64.1; against an older core it is
-# excluded.
-chain_check_exclude =
-  if Code.ensure_loaded?(PhoenixKit.TestSupport.ModuleChainCheck),
-    do: [],
-    else: [:requires_module_chain_check]
-
-ExUnit.start(exclude: chain_check_exclude ++ i18n_excludes ++ integration_excludes)
+ExUnit.start(exclude: integration_excludes)
 
 # Start the PhoenixKit settings cache so Settings-backed helpers (e.g.
 # Legal.hide_for_authenticated?/0) resolve cleanly without a full Ecto/Repo
@@ -134,12 +101,4 @@ end
 case PhoenixKit.Cache.start_link(name: :settings) do
   {:ok, _pid} -> :ok
   {:error, {:already_started, _pid}} -> :ok
-end
-
-# The manifest test builds the module's tables with `ModuleChainCheck.build_alone/4`
-# and hands the manifest to repair (`PhoenixKit.Module.expected_schema/0`); both
-# arrive in the first core release after 2.64.1.
-unless Code.ensure_loaded?(PhoenixKit.TestSupport.ModuleChainCheck) and
-         function_exported?(PhoenixKit.TestSupport.ModuleChainCheck, :build_alone, 4) do
-  ExUnit.configure(exclude: [:requires_core_expected_schema | ExUnit.configuration()[:exclude]])
 end

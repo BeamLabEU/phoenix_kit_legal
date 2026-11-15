@@ -6,27 +6,15 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
 
     * "module's own catalogue" — exercises the
       `PhoenixKit.Modules.Legal.Gettext` backend directly
-      (page titles, consent-widget strings). Runs against
-      every `phoenix_kit` release because it never touches
-      `Tab.localized_label/1` or the `gettext_backend:`
-      field.
+      (page titles, consent-widget strings).
 
     * "settings_tabs/0 wiring" — exercises
       `Tab.localized_label/1` and the `gettext_backend:` /
       `gettext_domain:` fields on `%Tab{}`, both introduced
       by [BeamLabEU/phoenix_kit#522](https://github.com/BeamLabEU/phoenix_kit/pull/522).
-      Tagged `:requires_phoenix_kit_i18n_api` so
-      `test_helper.exs` can exclude it on releases that
-      pre-date the API.
   """
 
   use ExUnit.Case, async: false
-
-  # `Tab.localized_label/1` ships with phoenix_kit#522. Suppress the
-  # undefined-function warning until that API is in a Hex release —
-  # the call sites are gated behind `:requires_phoenix_kit_i18n_api`
-  # in `test_helper.exs` and only run when the function is exported.
-  @compile {:no_warn_undefined, [{PhoenixKit.Dashboard.Tab, :localized_label, 1}]}
 
   alias PhoenixKit.Dashboard.Tab
   alias PhoenixKit.Modules.Legal
@@ -160,13 +148,6 @@ defmodule PhoenixKit.Modules.Legal.I18nTest do
   end
 
   describe "settings_tabs/0 wiring" do
-    # Excluded by `test/test_helper.exs` when running against a `phoenix_kit`
-    # release that pre-dates the `gettext_backend` API (PR BeamLabEU/phoenix_kit#522).
-    # Once the consumer's `phoenix_kit` dep resolves to a release that ships
-    # `Tab.localized_label/1`, the helper detects it and these tests run
-    # automatically — no follow-up edit needed.
-    @describetag :requires_phoenix_kit_i18n_api
-
     test "every tab carries the module's own gettext backend" do
       tabs = Legal.settings_tabs()
 

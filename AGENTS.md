@@ -11,7 +11,7 @@ Consent Mode v2, and logs consent decisions to an audit trail. It implements the
 `PhoenixKit.Module` behaviour and is auto-discovered by the host application.
 Legal generates content; Publishing renders it.
 
-- **Depends on:** `phoenix_kit` `~> 2.0` (Hex), `phoenix_kit_publishing` `~> 0.13`
+- **Depends on:** `phoenix_kit` `>= 3.5.0 and < 4.0.0` (Hex), `phoenix_kit_publishing` `~> 0.13`
   (hard — legal pages are Publishing posts and Publishing serves them publicly;
   call sites still go through `publishing_enabled?/0`, which rescues, and a
   `@compile {:no_warn_undefined, …}` list). Also `phoenix_live_view ~> 1.0`,
@@ -68,7 +68,7 @@ dep to `{:phoenix_kit, path: "../phoenix_kit", override: true}` in `mix.exs`,
 run `mix deps.get`, and revert **both** `mix.exs` and `mix.lock` before
 committing (switching between path and Hex resolution rewrites the lock).
 `test/core_pin_conformance_test.exs` fails on a committed `path:` override, and
-on a three-segment requirement such as `~> 2.0.3` (which admits no 2.1+ core and
+on a three-segment requirement such as `~> 3.5.0` (which admits no 3.6+ core and
 breaks consumers, never this repo).
 
 ## Conventions
@@ -482,9 +482,6 @@ shared.
 - starts `PhoenixKit.Cache.Registry` and the `:settings` cache so Settings-backed
   helpers resolve without Ecto; tests seed values with
   `PhoenixKit.Cache.put(:settings, key, value)`;
-- excludes `:requires_phoenix_kit_i18n_api` when
-  `PhoenixKit.Dashboard.Tab.localized_label/1` is not exported. Every core the
-  current pin admits exports it, so the gate is inert today;
 - calls `PhoenixKit.Modules.Legal.Test.DatabaseGuard.validate!/1` on the
   resolved database name before anything else — it raises unless the name is
   this package's own disposable fixture (`phoenix_kit_legal_test`, optionally
@@ -519,7 +516,7 @@ reads as protection and can never go red.
 | Feature | Constraint | Guide |
 |---|---|---|
 | Consent-log ownership | Core creates and audits `phoenix_kit_consent_logs`; this package owns its future shape through the chain. V1 must stay shape-identical to core's baseline, and a V2+ shape change needs core's excluded-object list updated first. | `dev_docs/guides/consent-logs-ownership.md` |
-| Consent config endpoint | `GET /phoenix_kit/api/consent-config` is core's route and core's controller. Never define a consent-config controller here; core ≥ 1.7.227 is the true floor (the `~> 2.0` pin satisfies it for unrelated reasons). | `dev_docs/guides/consent-logs-ownership.md` |
+| Consent config endpoint | `GET /phoenix_kit/api/consent-config` is core's route and core's controller. Never define a consent-config controller here; core ≥ 1.7.227 is where that began (the `>= 3.5.0 and < 4.0.0` pin is far above it). | `dev_docs/guides/consent-logs-ownership.md` |
 
 Root-cause records for the two public-page outages this module has had live in
 `dev_docs/reports/2026-07-25-legal-public-pages-404.md` (route reservation with
@@ -558,7 +555,3 @@ publish has succeeded.
   decision, not a patch; the reasoning and the options are in
   `dev_docs/reports/2026-08-19-executed-path-guard-allowlist-gap.md`. Unblocked
   when someone picks the allowlist shape.
-- `test_helper.exs` still gates `:requires_phoenix_kit_i18n_api` on
-  `Tab.localized_label/1` being exported. Every core the `~> 2.0` pin admits
-  exports it, so the gate can be deleted the next time this file is touched for
-  another reason.

@@ -597,9 +597,6 @@ defmodule PhoenixKit.Modules.Legal do
   # The one place this module writes a setting: `kind` is `:string`,
   # `:boolean` or `:json`, and `opts` (`:actor_uuid`, `:source`) reach the
   # settings history.
-  #
-  # Core takes those options from 2.16 on. On an older core the pin still
-  # admits, the write goes through without them rather than failing.
   @doc false
   @spec put_setting(:string | :boolean | :json, String.t(), term(), keyword()) ::
           {:ok, term()} | {:error, term()}
@@ -607,11 +604,7 @@ defmodule PhoenixKit.Modules.Legal do
     writer = settings_writer()
     function = Map.fetch!(@setting_writers, kind)
 
-    if Code.ensure_loaded?(writer) and function_exported?(writer, function, 4) do
-      apply(writer, function, [key, value, @module_name, opts])
-    else
-      apply(writer, function, [key, value, @module_name])
-    end
+    apply(writer, function, [key, value, @module_name, opts])
   end
 
   # A setting read from the setting itself rather than through the cache,

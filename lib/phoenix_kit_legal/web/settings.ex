@@ -17,7 +17,6 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
   @compile {:no_warn_undefined,
             [
-              {PhoenixKitWeb.Actor, :opts, 1},
               {PhoenixKit.Modules.Publishing, :enabled?, 0},
               {PhoenixKit.Modules.Publishing, :enabled_language_codes, 0},
               {PhoenixKit.Modules.Publishing, :get_primary_language, 0}
@@ -437,21 +436,11 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
 
   # Who is changing a setting, for the settings history: every write on this
   # page carries it. Core's `PhoenixKitWeb.Actor` is the one place that knows
-  # how to read the acting user off a socket; it arrived in 2.38, so on an
-  # older core the scope is read here instead.
+  # how to read the acting user off a socket.
   defp actor_opts(socket) do
-    actor =
-      if Code.ensure_loaded?(PhoenixKitWeb.Actor) and
-           function_exported?(PhoenixKitWeb.Actor, :opts, 1) do
-        PhoenixKitWeb.Actor.opts(socket)
-      else
-        case socket.assigns[:phoenix_kit_current_scope] do
-          %{user: %{uuid: uuid}} when is_binary(uuid) -> [actor_uuid: uuid]
-          _ -> []
-        end
-      end
-
-    Keyword.put(actor, :source, "settings")
+    socket
+    |> PhoenixKitWeb.Actor.opts()
+    |> Keyword.put(:source, "settings")
   end
 
   defp publishing_module_languages do

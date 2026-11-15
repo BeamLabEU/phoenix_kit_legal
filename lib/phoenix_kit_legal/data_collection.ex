@@ -147,7 +147,7 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
           Gettext.put_locale(language)
           # Discovery belongs inside the bounded task too. Its failure must
           # not become a successful policy generated from an empty list.
-          modules = Keyword.get_lazy(opts, :modules, &ModuleRegistry.enabled_modules/0)
+          modules = Keyword.get_lazy(opts, :modules, &discover_enabled!/0)
           {:ok, collect(modules)}
         rescue
           error -> {:error, error}
@@ -350,6 +350,18 @@ defmodule PhoenixKit.Modules.Legal.DataCollection do
   end
 
   # ── internals ─────────────────────────────────────────────────────────────
+
+  # Which modules are on, for generating a policy. Core's
+  # `ModuleRegistry.enabled_modules/0` reads an `enabled?/0` that raises or
+  # exits (a dead database pool) as "not enabled", which here would be a policy
+  # generated from fewer modules than are on. So the question is asked
+  # directly and its failure reaches the caller.
+  defp discover_enabled! do
+    Enum.filter(ModuleRegistry.all_modules(), fn module ->
+      Code.ensure_loaded?(module) and function_exported?(module, :enabled?, 0) and
+        module.enabled?()
+    end)
+  end
 
   defp enabled_modules do
     ModuleRegistry.enabled_modules()
