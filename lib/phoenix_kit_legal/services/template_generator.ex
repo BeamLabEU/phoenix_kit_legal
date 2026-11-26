@@ -118,6 +118,80 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   end
 
   @doc """
+  The template file a page in `language` is rendered from, and the locale
+  that file is in: `{path, locale}`.
+
+  For `"et-EE"` it tries, in order: the parent app's `{name}.et-EE.eex`, the
+  bundled `{name}.et-EE.eex`, the parent app's `{name}.et.eex`, the bundled
+  `{name}.et.eex`, then the English base template (parent app first) with
+  locale `"en"`. A language with no template falls back to English, and the
+  locale in the answer says so.
+  """
+  @spec resolve(String.t(), String.t() | nil) :: {String.t(), String.t()}
+  def resolve(template_name, language) do
+    language
+    |> locale_candidates()
+    |> Enum.reject(&(&1 == "en"))
+    |> Enum.find_value(&localized_path(template_name, &1)) ||
+      {get_base_template_path(template_name), "en"}
+  end
+
+  defp localized_path(template_name, locale) do
+    lang_name = localized_template_name(template_name, locale)
+
+    with :error <- get_parent_template_path(lang_name),
+         :error <- get_phoenix_kit_lang_template_path(lang_name) do
+      nil
+    else
+      {:ok, path} -> {path, locale}
+    end
+  end
+
+  @doc """
+  The locale a page in `language` would actually be written in (see
+  `resolve/2`) — `"en"` when no template exists for the language.
+  """
+  @spec resolved_locale(String.t(), String.t() | nil) :: String.t()
+  def resolved_locale(template_name, language),
+    do: template_name |> resolve(language) |> elem(1)
+
+  @doc """
+  A short fingerprint of the template a page in `language` is rendered from
+  (`"sha256:<12 hex>"` of the resolved file's bytes), or `nil` when the file
+  cannot be read. It changes whenever the template text does — a new
+  package release or a host override — so a record of "which text was
+  accepted" can name it.
+  """
+  @spec template_version(String.t(), String.t() | nil) :: String.t() | nil
+  def template_version(template_name, language) do
+    {path, _locale} = resolve(template_name, language)
+
+    case File.read(path) do
+      {:ok, bytes} ->
+        hex = :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
+        "sha256:" <> binary_part(hex, 0, 12)
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  # "et-EE" → ["et-EE", "et"]; "ru" → ["ru"]; junk or nil → [].
+  defp locale_candidates(language) when is_binary(language) do
+    language = String.trim(language)
+
+    if language =~ ~r/^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$/ do
+      base = language |> String.split(["-", "_"]) |> hd() |> String.downcase()
+      Enum.uniq([language, base])
+    else
+      []
+    end
+  end
+
+  defp locale_candidates(_), do: []
+
+
+  @doc """
   List all available templates.
   """
   @spec list_available_templates() :: list(String.t())

@@ -6,7 +6,10 @@ defmodule PhoenixKit.Modules.Legal do
   - Compliance framework selection (GDPR, CCPA, etc.)
   - Company information management
   - Legal page generation (Privacy Policy, Terms, Cookie Policy)
-  - Integration with Publishing module for page storage (optional, via phoenix_kit_publishing)
+  - Page storage through `PhoenixKit.Modules.Legal.PageStore`: Publishing
+    (`phoenix_kit_publishing`, an optional dependency) when installed, a
+    host-configured store, or none (then `render_page/2` hands the host the
+    rendered Markdown to serve itself)
 
   ## Phase 2: Cookie Consent Widget (prepared infrastructure)
   - Cookie consent banner
@@ -14,7 +17,9 @@ defmodule PhoenixKit.Modules.Legal do
   - Google Consent Mode v2 integration
 
   ## Dependencies
-  - Publishing module (phoenix_kit_publishing) must be installed and enabled
+  - Publishing (`phoenix_kit_publishing`) is optional. When it is installed it
+    must be enabled before this module can be; without it the consent
+    widget, consent log and `render_page/2` work and page storage is off.
 
   ## Usage
 
@@ -34,29 +39,12 @@ defmodule PhoenixKit.Modules.Legal do
   use PhoenixKit.Module
   use Gettext, backend: PhoenixKit.Modules.Legal.Gettext
 
-  @compile {:no_warn_undefined,
-            [
-              {PhoenixKit.Modules.Publishing, :enabled?, 0},
-              {PhoenixKit.Modules.Publishing, :get_primary_language, 0},
-              {PhoenixKit.Modules.Publishing, :fetch_group, 1},
-              {PhoenixKit.Modules.Publishing, :add_group, 2},
-              {PhoenixKit.Modules.Publishing, :list_posts, 1},
-              {PhoenixKit.Modules.Publishing, :list_posts_by_status, 2},
-              {PhoenixKit.Modules.Publishing, :read_post, 2},
-              {PhoenixKit.Modules.Publishing, :read_post, 4},
-              {PhoenixKit.Modules.Publishing, :create_post, 2},
-              {PhoenixKit.Modules.Publishing, :update_post, 4},
-              {PhoenixKit.Modules.Publishing, :publish_version, 4},
-              {PhoenixKit.Modules.Publishing, :add_language_to_post, 4},
-              {PhoenixKit.Modules.Publishing, :restore_post, 2},
-              {PhoenixKit.Modules.Publishing, :remove_group, 2}
-            ]}
-
   alias PhoenixKit.Dashboard.Tab
   alias PhoenixKit.Modules.Legal.Consent
   alias PhoenixKit.Modules.Legal.ConsentLog
   alias PhoenixKit.Modules.Legal.DataCollection
   alias PhoenixKit.Modules.Legal.LegalFramework
+  alias PhoenixKit.Modules.Legal.PageStore
   alias PhoenixKit.Modules.Legal.PageType
   alias PhoenixKit.Modules.Legal.TemplateGenerator
   alias PhoenixKit.Settings
@@ -196,28 +184,39 @@ defmodule PhoenixKit.Modules.Legal do
   @doc """
   Enable the Legal module.
 
-  Requires Publishing module to be enabled first.
-  Creates the "legal" publishing group if it doesn't exist.
+  With Publishing installed (or a host page store configured), the store
+  must be enabled first, and the "legal" publishing group is created if it
+  doesn't exist — the behaviour hosts have always had. Without any page
+  store (`PageStore.None`) the module enables on its own: the consent
+  widget and log work, page generation answers
+  `{:error, :publishing_unavailable}`.
 
   ## Returns
   - `{:ok, :enabled}` - Successfully enabled
-  - `{:error, :publishing_required}` - Publishing module must be enabled first
+  - `{:error, :publishing_required}` - Publishing is installed but not enabled
   """
   @spec enable_system() :: {:ok, :enabled} | {:error, :publishing_required | term()}
   def enable_system do
-    # Check Publishing dependency
-    if publishing_enabled?() do
-      case Settings.update_boolean_setting_with_module(@enabled_key, true, @module_name) do
-        {:ok, _} ->
-          # Ensure legal blog exists
-          ensure_legal_blog()
-          {:ok, :enabled}
+    cond do
+      not PageStore.available?() ->
+        case Settings.update_boolean_setting_with_module(@enabled_key, true, @module_name) do
+          {:ok, _} -> {:ok, :enabled}
+          error -> error
+        end
 
-        error ->
-          error
-      end
-    else
-      {:error, :publishing_required}
+      publishing_enabled?() ->
+        case Settings.update_boolean_setting_with_module(@enabled_key, true, @module_name) do
+          {:ok, _} ->
+            # Ensure legal blog exists
+            ensure_legal_blog()
+            {:ok, :enabled}
+
+          error ->
+            error
+        end
+
+      true ->
+        {:error, :publishing_required}
     end
   end
 
@@ -251,6 +250,7 @@ defmodule PhoenixKit.Modules.Legal do
     %{
       enabled: enabled?(),
       publishing_enabled: publishing_enabled?(),
+      publishing_installed: PageStore.available?(),
       frameworks: get_selected_frameworks(),
       company_info: get_company_info(),
       dpo_contact: get_dpo_contact(),
@@ -1092,7 +1092,10 @@ defmodule PhoenixKit.Modules.Legal do
     - :scope - User scope for audit trail
 
   ## Returns
-  - `{:ok, post}` on success
+  - `{:ok, post}` on success; the template's locale and version are
+    recorded (`generated_page_templates/0`)
+  - `{:error, :publishing_unavailable}` when no page store is installed
+    (see `PageStore`; `render_page/2` still renders)
   - `{:error, {:data_collection, reason}}` when what the site's modules
     declare could not be gathered — the page is not written from a partial
     list, and the cookie policy's fingerprint is left as it was
@@ -1109,9 +1112,180 @@ defmodule PhoenixKit.Modules.Legal do
          {:ok, content} <- render_template(page_config.template, language),
          {:ok, post} <- create_or_update_legal_post(page_config, content, language, scope) do
       remember_collection(page_type, scope)
+      remember_template(page_config, language, scope)
       {:ok, post}
     end
   end
+
+  @doc """
+  Renders a legal page without storing it: the page's Markdown in
+  `:language` (default `"en"`), from the locale-keyed template with English
+  fallback (`TemplateGenerator.resolve/2`).
+
+  For hosts that serve legal pages themselves — without Publishing, or in
+  addition to it. Returns `{:ok, page}` where `page` has `:slug`, `:title`,
+  `:content` (Markdown, headed by the title), `:language` (what was asked),
+  `:locale` (what the text is in; `"en"` after a fallback) and
+  `:template_version` (`TemplateGenerator.template_version/2`), or
+  `{:error, :unknown_page_type | {:data_collection, _} | term()}`.
+  """
+  @spec render_page(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def render_page(page_type, opts \\ []) do
+    language = Keyword.get(opts, :language, "en")
+
+    with {:ok, page_config} <- get_page_config(page_type),
+         {:ok, content} <- render_template(page_config.template, language) do
+      locale = TemplateGenerator.resolved_locale(page_config.template, language)
+      title = translate_title(page_config.title, locale)
+
+      {:ok,
+       %{
+         slug: page_config.slug,
+         title: title,
+         content: "# #{title}\n\n#{content}",
+         language: language,
+         locale: locale,
+         template_version: TemplateGenerator.template_version(page_config.template, language)
+       }}
+    end
+  end
+
+  @page_templates_key "legal_page_templates"
+
+  @doc """
+  What each generated page was last written from, per language:
+  `%{"privacy-policy" => %{"et" => %{"locale" => "et", "template_version" =>
+  "sha256:…", "generated_at" => "…"}}}`. `"locale"` differs from the
+  language key when the page fell back to English.
+  """
+  @spec generated_page_templates() :: map()
+  def generated_page_templates do
+    case Settings.get_json_setting(@page_templates_key, %{}) do
+      %{} = map -> Map.drop(map, ["items"])
+      _ -> %{}
+    end
+  rescue
+    _ -> %{}
+  end
+
+  # Best-effort, like `remember_collection/2`: losing it only loses the
+  # hint, never the page.
+  @doc false
+  @spec remember_template(PageType.t(), String.t(), map() | nil) :: :ok
+  def remember_template(page_config, language, scope) do
+    entry = %{
+      "locale" => TemplateGenerator.resolved_locale(page_config.template, language),
+      "template_version" => TemplateGenerator.template_version(page_config.template, language),
+      "generated_at" => DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    }
+
+    current =
+      case fresh_json_setting(@page_templates_key, %{}) do
+        %{} = map -> map
+        _ -> %{}
+      end
+
+    page = current |> Map.get(page_config.slug, %{}) |> Map.put(language, entry)
+
+    opts =
+      case actor_uuid(scope) do
+        uuid when is_binary(uuid) -> [actor_uuid: uuid]
+        _ -> []
+      end
+
+    put_setting(:json, @page_templates_key, Map.put(current, page_config.slug, page), opts)
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  @doc """
+  What a visitor deciding in `language` is shown, for the consent record:
+  `%{"locale" => requested, "policy_locale" => locale of the policy text,
+  "template_versions" => %{slug => version}}` for the pages the selected
+  frameworks require. A generated page's recorded template
+  (`generated_page_templates/0`) wins over the bundled template, since that
+  is the text visitors read. `"policy_locale"` is `"en"` when the language
+  fell back to English. `language` that is not a language code reads as
+  `nil` (then `"en"`).
+  """
+  @spec policy_record(String.t() | nil) :: map()
+  def policy_record(language) do
+    language = clean_locale(language)
+
+    # Cached readers only: this runs on every consent write.
+    recorded =
+      case cached_json(@page_templates_key, %{}) do
+        %{} = map -> map
+        _ -> %{}
+      end
+
+    frameworks =
+      case cached_json("legal_frameworks", %{"items" => []}) do
+        %{"items" => ids} when is_list(ids) -> Enum.filter(ids, &Map.has_key?(@frameworks, &1))
+        _ -> []
+      end
+
+    pages =
+      frameworks
+      |> get_required_pages_for_frameworks()
+      |> Enum.flat_map(fn slug ->
+        case get_page_config(slug) do
+          {:ok, config} -> [config]
+          _ -> []
+        end
+      end)
+
+    versions =
+      Map.new(pages, fn config ->
+        {config.slug, page_template_version(config, language, recorded)}
+      end)
+
+    policy_locale =
+      case pages do
+        [first | _] -> TemplateGenerator.resolved_locale(first.template, language)
+        [] -> TemplateGenerator.resolved_locale("privacy_policy.eex", language)
+      end
+
+    %{"locale" => language, "policy_locale" => policy_locale, "template_versions" => versions}
+  rescue
+    _ -> %{"locale" => clean_locale(language)}
+  end
+
+  defp cached_json(key, default) do
+    case Settings.get_json_setting_cached(key, default) do
+      value when is_binary(value) ->
+        case Jason.decode(value) do
+          {:ok, decoded} -> decoded
+          _ -> default
+        end
+
+      value ->
+        value
+    end
+  end
+
+  defp page_template_version(config, language, recorded) do
+    lang = language || "en"
+
+    case get_in(recorded, [config.slug, lang, "template_version"]) do
+      version when is_binary(version) -> version
+      _ -> TemplateGenerator.template_version(config.template, lang)
+    end
+  end
+
+  @doc false
+  # A language code (`et`, `et-EE`, `zh_Hant`), at most 16 characters, or nil.
+  @spec clean_locale(term()) :: String.t() | nil
+  def clean_locale(locale) when is_binary(locale) do
+    locale = String.trim(locale)
+
+    if byte_size(locale) <= 16 and locale =~ ~r/^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$/,
+      do: locale,
+      else: nil
+  end
+
+  def clean_locale(_), do: nil
 
   @doc """
   Publish a legal page by slug.
@@ -1370,9 +1544,9 @@ defmodule PhoenixKit.Modules.Legal do
     _ -> false
   end
 
-  defp publishing_module do
-    PhoenixKit.Modules.Publishing
-  end
+  # Every page-store call goes through the adapter (`PageStore.adapter/0`):
+  # Publishing when installed, else a host store or `PageStore.None`.
+  defp publishing_module, do: PageStore.adapter()
 
   @doc false
   def ensure_legal_blog do
@@ -1380,6 +1554,9 @@ defmodule PhoenixKit.Modules.Legal do
     case publishing_module().fetch_group(@legal_blog_slug) do
       {:ok, _existing_blog} ->
         {:ok, :exists}
+
+      {:error, :publishing_unavailable} = unavailable ->
+        unavailable
 
       {:error, :not_found} ->
         # Blog doesn't exist, create it

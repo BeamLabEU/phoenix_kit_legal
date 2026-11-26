@@ -67,8 +67,10 @@ defmodule PhoenixKitLegal.MixProject do
       # rustler_precompiled. Optional: pulled only to compile the NIF.
       {:rustler, ">= 0.0.0", optional: true},
 
-      # Publishing module for storing generated legal pages as posts.
-      {:phoenix_kit_publishing, "~> 0.15"},
+      # Publishing stores generated legal pages as posts and serves them.
+      # Optional: without it the consent widget/log and `Legal.render_page/2`
+      # work and page storage is off (`PhoenixKit.Modules.Legal.PageStore`).
+      {:phoenix_kit_publishing, "~> 0.15", optional: true},
 
       # LiveView for admin settings page.
       {:phoenix_live_view, "~> 1.0"},
