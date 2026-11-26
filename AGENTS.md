@@ -11,10 +11,10 @@ Consent Mode v2, and logs consent decisions to an audit trail. It implements the
 `PhoenixKit.Module` behaviour and is auto-discovered by the host application.
 Legal generates content; Publishing renders it.
 
-- **Depends on:** `phoenix_kit` `>= 3.5.0 and < 4.0.0` (Hex), `phoenix_kit_publishing` `~> 0.13`
-  (hard — legal pages are Publishing posts and Publishing serves them publicly;
-  call sites still go through `publishing_enabled?/0`, which rescues, and a
-  `@compile {:no_warn_undefined, …}` list). Also `phoenix_live_view ~> 1.0`,
+- **Depends on:** `phoenix_kit` `>= 3.5.0 and < 4.0.0` (Hex), `phoenix_kit_publishing` `~> 0.15`
+  (**optional** — legal pages are Publishing posts and Publishing serves them
+  publicly when it is installed; every call goes through the
+  `Legal.PageStore` adapter, see Conventions). Also `phoenix_live_view ~> 1.0`,
   `ecto_sql ~> 3.10`, `gettext ~> 1.0`.
 - **Consumed by:** any module that collects data server-side may ask
   `Legal.Consent.status/2` (behind `Code.ensure_loaded?/1` — `phoenix_kit_web_analytics`
@@ -32,7 +32,8 @@ Legal generates content; Publishing renders it.
 ## What this module does NOT do
 
 - **No public page: no LiveView, page controller or template.** (The one
-  controller is the consent endpoint's, JSON only.) Generated pages are Publishing
+  controller is the consent endpoint's, JSON only; `render_page/2` returns
+  Markdown for a host that serves pages itself, it routes nothing.) Generated pages are Publishing
   posts in the group slugged `"legal"`; Publishing's `/:language/:group/*path`
   catch-all serves them at `/legal` and `/legal/:slug`, with languages,
   translations, canonical/`og:*`/hreflang, editing and the version dropdown.
@@ -208,9 +209,31 @@ breaks consumers, never this repo).
 - **Consent vocabulary:** types are `"necessary"` (always on), `"analytics"`,
   `"marketing"`, `"preferences"`; modes are `"strict"` (opt-in, the default for
   GDPR) and `"notice"` (opt-out/informational).
-- **Publishing must be enabled** before this module can be: `enable_system/0`
-  returns `{:error, :publishing_required}` otherwise, and creates the `"legal"`
-  group when it succeeds.
+- **Page store (`Legal.PageStore`):** every Publishing call goes through
+  `PageStore.adapter/0` — `config :phoenix_kit_legal, :page_store` (a host
+  module implementing the behaviour) if set, else `PageStore.Publishing` when
+  `PhoenixKit.Modules.Publishing` is loaded, else `PageStore.None` (reads find
+  nothing, writes `{:error, :publishing_unavailable}`). Never call
+  `PhoenixKit.Modules.Publishing` directly; add the function to the behaviour
+  and both adapters. With Publishing installed, it **must be enabled** before
+  this module can be: `enable_system/0` returns `{:error, :publishing_required}`
+  otherwise, and creates the `"legal"` group when it succeeds. Without any
+  store, `enable_system/0` succeeds (consent widget and log work) and
+  `render_page/2` hands a host the rendered Markdown to serve itself.
+- **Locale-keyed templates:** bundled `{name}.eex` (English), `{name}.et.eex`,
+  `{name}.ru.eex`. `TemplateGenerator.resolve/2` tries the full code, then the
+  base language (`et-EE` → `et`), parent app before bundled, then English, and
+  returns the locale actually used; `template_version/2` fingerprints the
+  resolved file. A translation keeps the source's EEx tags exactly (only
+  reader-facing string literals differ — `localized_templates_test.exs`
+  checks); a template change goes into all three files.
+- **What was accepted is recorded:** `generate_page/2` stores each page's
+  template locale and version per language in `legal_page_templates`
+  (`generated_page_templates/0`). A consent write given `:locale` (the
+  endpoint passes the banner's `<html lang>` or the first `Accept-Language`
+  tag, through `clean_locale/1`) adds `"locale"`, `"policy_locale"` (English
+  after a fallback) and `"template_versions"` to the log entry's `metadata`
+  (`Legal.policy_record/1`) — JSONB, no schema change.
 - **Soft delete:** none here. Publishing owns trashing of legal pages;
   `diagnose_legal_pages/0` and `reset_legal_pages/0` deal with trashed posts
   whose slugs collide with regeneration.
@@ -258,6 +281,7 @@ lib/
     ├── legal.ex                          # PhoenixKit.Module facade
     ├── consent.ex                        # the server's copy of a decision: cookie + log
     ├── data_collection.ex                # what modules declare they collect
+    ├── page_store.ex (+ page_store/)     # optional Publishing behind an adapter (Publishing / None)
     ├── routes.ex                         # route module: the consent endpoint
     ├── legal_framework.ex                # LegalFramework struct
     ├── page_type.ex                      # PageType struct
@@ -271,7 +295,7 @@ lib/
         └── settings.ex + settings.html.heex  # admin LiveView
 priv/
 ├── gettext/                              # default.pot + de, en, et, fr, ru
-├── legal_templates/*.eex                 # 7 bundled page templates
+├── legal_templates/*.eex                 # 7 bundled page templates, each in en, et (.et.eex), ru (.ru.eex)
 └── static/assets/phoenix_kit_consent.js  # browser consent manager
 ```
 
@@ -307,7 +331,7 @@ legal pages live in Publishing's tables.
 | `consent_given` | boolean, default `false` |
 | `consent_version` | policy version at the time of consent |
 | `ip_address`, `user_agent_hash` | compliance metadata (SHA256 hash); written by the endpoint only when their settings are on |
-| `metadata` | JSONB, extensible. The endpoint writes `source` and `gpc` |
+| `metadata` | JSONB, extensible. The endpoint writes `source`, `gpc`, and `locale` / `policy_locale` / `template_versions` (what text the decision was made under) |
 
 `varchar` widths (`session_id` 64, `consent_type` 30, `consent_version` 20,
 `ip_address` 45, `user_agent_hash` 64) are declared once in
@@ -336,6 +360,7 @@ the outer transaction and `{:error, errors}` surfaces there instead.
 | `legal_consent_cookie_days` | days a decision lasts (default 180). A write outside 1..730 is refused (`{:error, :invalid_days}`); a stored value out of range is clamped on read |
 | `legal_consent_reload_on_withdrawal` | reload the page when a consent is taken back (default on) |
 | `legal_hidden_collection` | JSON `{"items": [keys]}` — declared entries the operator hid |
+| `legal_page_templates` | JSON: page slug → language → `locale`, `template_version`, `generated_at` of the last generation |
 | `legal_policy_collection_fingerprint` | what the Cookie Policy was last generated from: a hash of the listed entries' key, mode, category, data, retention and stored items (name, kind, duration), taken in English |
 
 ### Compliance frameworks
@@ -354,10 +379,11 @@ the outer transaction and `{:error, errors}` surfaces there instead.
 
 Templates live in `priv/legal_templates/`, resolved in this order:
 
-1. parent app's `priv/legal_templates/{name}.{lang}.eex`
-2. bundled language-specific template
-3. parent app's `priv/legal_templates/{name}.eex`
-4. bundled base template
+1. parent app's `priv/legal_templates/{name}.{lang}.eex` (`lang` as given, e.g. `et-EE`)
+2. bundled `{name}.{lang}.eex`
+3. the same two for the base language (`et`)
+4. parent app's `priv/legal_templates/{name}.eex`
+5. bundled base (English) template
 
 Every template receives `@company_name`, `@company_address`, `@company_country`,
 `@company_website`, `@registration_number`, `@vat_number`, `@dpo_name`,
