@@ -97,6 +97,36 @@ defmodule PhoenixKit.Modules.Legal.RenderPageTest do
              "sha256:recorded0000"
   end
 
+  test "policy_record/1 finds the page generated in the base language for a regional code" do
+    PhoenixKit.Cache.put(:settings, "legal_page_templates", %{
+      "privacy-policy" => %{
+        "et" => %{"locale" => "et", "template_version" => "sha256:recorded0000"}
+      }
+    })
+
+    assert Legal.policy_record("et-EE")["template_versions"]["privacy-policy"] ==
+             "sha256:recorded0000"
+  end
+
+  test "policy_record/1 takes the policy language from the generated page's record" do
+    # A page generated for "et" from a host's English-only override.
+    PhoenixKit.Cache.put(:settings, "legal_page_templates", %{
+      "privacy-policy" => %{
+        "et" => %{"locale" => "en", "template_version" => "sha256:recorded0000"}
+      }
+    })
+
+    record = Legal.policy_record("et")
+    assert record["policy_locale"] == "en"
+  end
+
+  test "render_page/2 with a nil language renders English" do
+    with_settings(fn ->
+      assert {:ok, page} = Legal.render_page("privacy-policy", language: nil)
+      assert page.locale == "en"
+    end)
+  end
+
   test "clean_locale/1 keeps language codes only" do
     assert Legal.clean_locale("et") == "et"
     assert Legal.clean_locale(" zh_Hant ") == "zh_Hant"

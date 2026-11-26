@@ -1131,7 +1131,7 @@ defmodule PhoenixKit.Modules.Legal do
   """
   @spec render_page(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def render_page(page_type, opts \\ []) do
-    language = Keyword.get(opts, :language, "en")
+    language = Keyword.get(opts, :language) || "en"
 
     with {:ok, page_config} <- get_page_config(page_type),
          {:ok, content} <- render_template(page_config.template, language) do
@@ -1243,7 +1243,7 @@ defmodule PhoenixKit.Modules.Legal do
 
     policy_locale =
       case pages do
-        [first | _] -> TemplateGenerator.resolved_locale(first.template, language)
+        [first | _] -> page_locale(first, language, recorded)
         [] -> TemplateGenerator.resolved_locale("privacy_policy.eex", language)
       end
 
@@ -1266,12 +1266,37 @@ defmodule PhoenixKit.Modules.Legal do
   end
 
   defp page_template_version(config, language, recorded) do
-    lang = language || "en"
-
-    case get_in(recorded, [config.slug, lang, "template_version"]) do
-      version when is_binary(version) -> version
-      _ -> TemplateGenerator.template_version(config.template, lang)
+    case recorded_page(config, language, recorded) do
+      %{"template_version" => version} when is_binary(version) -> version
+      _ -> TemplateGenerator.template_version(config.template, language || "en")
     end
+  end
+
+  defp page_locale(config, language, recorded) do
+    case recorded_page(config, language, recorded) do
+      %{"template_version" => version, "locale" => locale}
+      when is_binary(version) and is_binary(locale) ->
+        locale
+
+      _ ->
+        TemplateGenerator.resolved_locale(config.template, language)
+    end
+  end
+
+  # The generated page's record for `language`, or for its base language
+  # (`et-EE` → the page generated as `et`), the same order the templates
+  # resolve in.
+  defp recorded_page(config, language, recorded) do
+    lang = language || "en"
+    base = lang |> String.split(["-", "_"]) |> hd() |> String.downcase()
+    pages = Map.get(recorded, config.slug, %{})
+
+    Enum.find_value(Enum.uniq([lang, base]), fn key ->
+      case Map.get(pages, key) do
+        %{} = entry -> entry
+        _ -> nil
+      end
+    end)
   end
 
   @doc false
