@@ -26,6 +26,12 @@ defmodule PhoenixKit.Modules.Legal.LocalizedTemplatesTest do
     effective_date: "2026-11-26"
   }
 
+  test "an upper-case language subtag resolves to the lower-case catalogue" do
+    assert {_path, "et"} = TemplateGenerator.resolve("privacy_policy.eex", "ET")
+    assert {_path, "et"} = TemplateGenerator.resolve("privacy_policy.eex", "ET-ee")
+    assert {_path, "ru"} = TemplateGenerator.resolve("privacy_policy.eex", "RU_ru")
+  end
+
   test "every bundled template has an et and a ru version" do
     dir = Path.join(:code.priv_dir(:phoenix_kit_legal), "legal_templates")
 

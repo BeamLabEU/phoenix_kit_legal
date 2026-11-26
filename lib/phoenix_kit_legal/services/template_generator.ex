@@ -164,8 +164,14 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
     language = String.trim(language)
 
     if language =~ ~r/^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$/ do
-      base = language |> String.split(["-", "_"]) |> hd() |> String.downcase()
-      Enum.uniq([language, base])
+      [first | _rest] = String.split(language, ["-", "_"])
+      base = String.downcase(first)
+      # "ET-ee" → "et-ee", then "et": the language subtag in the catalogue's
+      # case, so a case-insensitive filesystem cannot answer "ET".
+      full =
+        base <> binary_part(language, byte_size(first), byte_size(language) - byte_size(first))
+
+      Enum.uniq([full, base])
     else
       []
     end
