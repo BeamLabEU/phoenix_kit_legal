@@ -35,6 +35,17 @@ defmodule PhoenixKit.Modules.Legal.PageStoreTest do
     end
   end
 
+  test "a misconfigured store is logged once, not on every call" do
+    Application.put_env(:phoenix_kit_legal, :page_store, Nope.LoggedOnce)
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        for _ <- 1..5, do: PageStore.adapter()
+      end)
+
+    assert length(String.split(log, "Nope.LoggedOnce")) - 1 <= 1
+  end
+
   test "None stores nothing and says so" do
     none = PageStore.None
     refute none.enabled?()

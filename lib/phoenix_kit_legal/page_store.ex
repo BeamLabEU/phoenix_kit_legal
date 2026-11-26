@@ -69,12 +69,20 @@ defmodule PhoenixKit.Modules.Legal.PageStore do
 
   defp implements?(_), do: false
 
+  # adapter/0 runs on hot paths (every consent write reaches it), so the
+  # misconfiguration is logged once per configured value, not per call.
   defp misconfigured(mod) do
-    require Logger
+    key = {__MODULE__, :warned, mod}
 
-    Logger.warning(
-      "[Legal] :page_store #{inspect(mod)} is not a loaded PhoenixKit.Modules.Legal.PageStore; using the default store"
-    )
+    unless :persistent_term.get(key, false) do
+      require Logger
+
+      Logger.warning(
+        "[Legal] :page_store #{inspect(mod)} is not a loaded PhoenixKit.Modules.Legal.PageStore; using the default store"
+      )
+
+      :persistent_term.put(key, true)
+    end
 
     default_adapter()
   end
