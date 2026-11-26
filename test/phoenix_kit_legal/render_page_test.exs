@@ -120,6 +120,13 @@ defmodule PhoenixKit.Modules.Legal.RenderPageTest do
     assert record["policy_locale"] == "en"
   end
 
+  test "policy_record/1 survives a malformed recorded entry" do
+    PhoenixKit.Cache.put(:settings, "legal_page_templates", %{"privacy-policy" => "x"})
+    record = Legal.policy_record("et")
+    assert record["policy_locale"] == "et"
+    assert %{"privacy-policy" => "sha256:" <> _} = record["template_versions"]
+  end
+
   test "render_page/2 with a nil language renders English" do
     with_settings(fn ->
       assert {:ok, page} = Legal.render_page("privacy-policy", language: nil)

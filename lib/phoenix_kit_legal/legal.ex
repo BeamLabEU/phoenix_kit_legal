@@ -1289,7 +1289,12 @@ defmodule PhoenixKit.Modules.Legal do
   defp recorded_page(config, language, recorded) do
     lang = language || "en"
     base = lang |> String.split(["-", "_"]) |> hd() |> String.downcase()
-    pages = Map.get(recorded, config.slug, %{})
+
+    pages =
+      case Map.get(recorded, config.slug) do
+        %{} = pages -> pages
+        _ -> %{}
+      end
 
     Enum.find_value(Enum.uniq([lang, base]), fn key ->
       case Map.get(pages, key) do
