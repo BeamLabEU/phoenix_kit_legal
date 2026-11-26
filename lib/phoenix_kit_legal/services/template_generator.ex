@@ -92,29 +92,11 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   @doc """
   Get the full path to a template file, with language-aware lookup.
 
-  For a given language, tries `{name}.{lang}.eex` first, then falls back to `{name}.eex`.
-  Checks parent application first, then falls back to PhoenixKit templates.
+  See `resolve/2` for the order; this returns only the path.
   """
   @spec get_template_path(String.t(), String.t()) :: String.t()
   def get_template_path(template_name, language \\ "en") do
-    lang_template_name = localized_template_name(template_name, language)
-
-    # Try language-specific template first (parent app, then PhoenixKit)
-    # Fall back to base template (parent app, then PhoenixKit)
-    if language != "en" do
-      get_localized_template_path(lang_template_name, template_name)
-    else
-      get_base_template_path(template_name)
-    end
-  end
-
-  defp get_localized_template_path(lang_template_name, base_template_name) do
-    with :error <- get_parent_template_path(lang_template_name),
-         :error <- get_phoenix_kit_lang_template_path(lang_template_name) do
-      get_base_template_path(base_template_name)
-    else
-      {:ok, path} -> path
-    end
+    template_name |> resolve(language) |> elem(0)
   end
 
   @doc """
@@ -124,8 +106,9 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   For `"et-EE"` it tries, in order: the parent app's `{name}.et-EE.eex`, the
   bundled `{name}.et-EE.eex`, the parent app's `{name}.et.eex`, the bundled
   `{name}.et.eex`, then the English base template (parent app first) with
-  locale `"en"`. A language with no template falls back to English, and the
-  locale in the answer says so.
+  locale `"en"`. The bundled templates exist in English, Estonian (`et`) and
+  Russian (`ru`); any other language falls back to English, and the locale
+  in the answer says so.
   """
   @spec resolve(String.t(), String.t() | nil) :: {String.t(), String.t()}
   def resolve(template_name, language) do
@@ -189,7 +172,6 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   end
 
   defp locale_candidates(_), do: []
-
 
   @doc """
   List all available templates.

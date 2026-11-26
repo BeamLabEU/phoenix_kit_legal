@@ -1,0 +1,161 @@
+<%!-- Terms of Service Template --%>
+<%!-- Variables: company_name, company_address, company_country, company_website, dpo_email, effective_date --%>
+
+> **DOKUMENDI MUSTAND - VAJALIK ÕIGUSLIK ÜLEVAATUS**
+>
+> See dokument on loodud automaatselt ja on põhimall.
+> Kvalifitseeritud õigusspetsialist PEAB selle enne avaldamist
+> üle vaatama ja kohandama, et tagada vastavus kohaldatavatele õigusaktidele.
+>
+> Viimati loodud: <%= @effective_date %>
+
+---
+
+**Jõustumise kuupäev:** <%= @effective_date %>
+
+## 1. Tingimustega nõustumine
+
+Kasutades teenuseid, mida osutab <%= @company_name %> („meie“ või „meid“)<%= if @company_website != "", do: " aadressil #{@company_website}", else: "" %>, või neile juurde pääsedes nõustute järgima käesolevaid kasutustingimusi („Tingimused“). Kui te Tingimustega ei nõustu, ärge palun meie teenuseid kasutage.
+
+## 2. Ettevõtte andmed
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @company_country != "" do %><%= @company_country %><% end %>
+<%= if @registration_number != "" do %>Registrikood: <%= @registration_number %><% end %>
+<%= if @vat_number != "" do %>KMKR number: <%= @vat_number %><% end %>
+
+## 3. Kasutusõigus
+
+Meie teenuste kasutamiseks peate olema vähemalt 18-aastane (või teie jurisdiktsioonis kehtiva täisealisuse vanuse). Meie teenuseid kasutades kinnitate ja tagate, et vastate sellele nõudele.
+
+## 4. Konto registreerimine
+
+### 4.1 Konto loomine
+
+Kontot luues nõustute:
+- esitama täpsed, ajakohased ja täielikud andmed
+- hoidma oma kontoandmed korras ja neid viivitamata ajakohastama
+- hoidma oma parooli konfidentsiaalsena ja turvalisena
+- teavitama meid viivitamata igast volitamata juurdepääsust oma kontole
+- võtma vastutuse kõigi oma kontol toimuvate tegevuste eest
+
+### 4.2 Konto sulgemine
+
+Jätame endale õiguse teie konto igal ajal mis tahes põhjusel peatada või sulgeda, sealhulgas juhul, kui meil on põhjendatud alus arvata, et olete käesolevaid Tingimusi rikkunud.
+
+## 5. Vastuvõetav kasutamine
+
+### 5.1 Lubatud kasutamine
+
+Võite kasutada meie teenuseid üksnes seaduslikel eesmärkidel ja kooskõlas käesolevate Tingimustega.
+
+### 5.2 Keelatud tegevused
+
+Nõustute, et te EI:
+- riku kohaldatavaid seadusi, määrusi ega kolmandate isikute õigusi
+- kasuta teenuseid ebaseaduslikul või lubamatul eesmärgil
+- edasta viiruseid, pahavara ega muud pahatahtlikku koodi
+- püüa saada volitamata juurdepääsu meie süsteemidele või võrkudele
+- sega ega häiri meie teenuste terviklikkust või toimimist
+- kogu kasutajaandmeid ilma nõusolekuta
+- esine ühegi isiku ega üksusena
+- tegele tegevusega, mis võib kahjustada meie mainet
+- kasuta meie teenustele juurdepääsuks ilma loata automatiseeritud vahendeid
+- tegele meie teenuste ühegi osa pöördprojekteerimise, dekompileerimise ega lahtimonteerimisega
+
+## 6. Intellektuaalomand
+
+### 6.1 Meie õigused
+
+Kogu meie teenuste sisu, funktsioonid ja funktsionaalsus, sealhulgas muu hulgas tekst, graafika, logod, ikoonid, pildid, heli, video, tarkvara ja kood, kuuluvad ettevõttele <%= @company_name %> või on talle litsentsitud ning on kaitstud autoriõiguse, kaubamärgiõiguse ja muude intellektuaalomandit käsitlevate õigusaktidega.
+
+### 6.2 Piiratud litsents
+
+Anname teile piiratud, lihtlitsentsi, mis ei ole üleantav ja mille võib tagasi võtta, et pääseda juurde meie teenustele ja kasutada neid isiklikuks, mitteäriliseks otstarbeks vastavalt käesolevatele Tingimustele.
+
+### 6.3 Teie sisu
+
+Teile jääb omandiõigus kogu sisule, mille te meie teenustesse esitate. Sisu esitades annate meile ülemaailmse, tasuta ja all-litsentsitava litsentsi kasutada, reprodutseerida, muuta ja kuvada sellist sisu seoses meie teenustega.
+
+## 7. Maksetingimused
+
+### 7.1 Tasud
+
+Meie teenuste teatud funktsioonid võivad olla tasulised. Kõik tasud on esitatud kohaldatavas vääringus ja ei sisalda makse, kui ei ole märgitud teisiti.
+
+### 7.2 Maksete töötlemine
+
+Makseid töötlevad kolmandatest isikutest makseteenuse pakkujad. Makse tegemisega nõustute makseteenuse pakkuja tingimustega.
+
+### 7.3 Tagasimaksed
+
+Tagasimakse põhimõtted erinevad teenuseti. Palun tutvuge ostetava teenuse konkreetsete tingimustega.
+
+## 8. Garantiidest lahtiütlemine
+
+MEIE TEENUSEID OSUTATAKSE „NAGU ON“ JA „NAGU SAADAVAL“, ILMA MIS TAHES OTSESTE VÕI KAUDSETE GARANTIIDETA, SEALHULGAS MUU HULGAS KAUDSED GARANTIID KAUBANDUSLIKU SOBIVUSE, KONKREETSEKS OTSTARBEKS SOBIVUSE JA ÕIGUSTE MITTERIKKUMISE KOHTA.
+
+Me ei garanteeri, et:
+- meie teenused toimivad katkestusteta, vigadeta või turvaliselt
+- kõik puudused parandatakse
+- meie teenused vastavad teie nõudmistele
+- saavutatakse mis tahes tulemused
+
+## 9. Vastutuse piiramine
+
+SEADUSEGA LUBATUD ULATUSES EI VASTUTA <%= String.upcase(@company_name) %> MIS TAHES KAUDSE, JUHUSLIKU, ERILISE, TULENEVA VÕI KARISTUSLIKU KAHJU EEST, SEALHULGAS MUU HULGAS SAAMATA JÄÄNUD TULU, ANDMETE, KASUTUSVÕIMALUSE, MAINE VÕI MUU IMMATERIAALSE KAHJU EEST, MIS TULENEB:
+
+- teie poolt meie teenuste kasutamisest või nende kasutamise võimatusest
+- mis tahes volitamata juurdepääsust meie serveritele või nende kasutamisest
+- mis tahes katkestusest või lõppemisest andmeedastuses meie teenustesse või teenustest
+- mis tahes vigadest, viirustest või muust kahjulikust koodist, mis edastatakse meie teenuste kaudu
+- mis tahes vigadest või puudujääkidest mis tahes sisus
+
+## 10. Kahju hüvitamine
+
+Nõustute hüvitama ettevõttele <%= @company_name %> ning selle ametiisikutele, juhatuse liikmetele, töötajatele, esindajatele ja sidusettevõtjatele kõik nõuded, kahjud, kaotused, kohustused ja kulud (sealhulgas õigusabikulud), kaitsma neid nende vastu ja vabastama neid vastutusest, mis tulenevad:
+
+- teie poolt meie teenuste kasutamisest
+- teie poolt käesolevate Tingimuste rikkumisest
+- teie poolt kolmandate isikute õiguste rikkumisest
+- teie poolt meie teenustesse esitatud sisust
+
+## 11. Kohaldatav õigus ja vaidluste lahendamine
+
+### 11.1 Kohaldatav õigus
+
+Käesolevatele Tingimustele kohaldatakse ja neid tõlgendatakse järgmise jurisdiktsiooni õiguse kohaselt: <%= if @company_country != "", do: @company_country, else: "[teie jurisdiktsioon]" %>, arvestamata selle kollisiooninorme.
+
+### 11.2 Vaidluste lahendamine
+
+Kõik käesolevatest Tingimustest või teie poolt meie teenuste kasutamisest tulenevad vaidlused lahendatakse:
+
+1. **Mitteametlike läbirääkimiste teel:** esmalt meiega ühendust võttes, et püüda vaidlus lahendada
+2. **Lepitusmenetluse teel:** kui läbirääkimised ebaõnnestuvad, lepitusmenetluse kaudu
+3. **Vahekohtu- või kohtumenetluse teel:** viimase abinõuna siduva vahekohtumenetluse või kohtumenetluse teel järgmise jurisdiktsiooni kohtutes: <%= if @company_country != "", do: @company_country, else: "[teie jurisdiktsioon]" %>
+
+## 12. Tingimuste muudatused
+
+Jätame endale õiguse käesolevaid Tingimusi igal ajal muuta. Olulistest muudatustest teavitame teid järgmiselt:
+- avaldame ajakohastatud Tingimused oma veebisaidil
+- uuendame dokumendi alguses olevat „Jõustumise kuupäeva“
+- saadame teile e-posti teel teate (oluliste muudatuste korral)
+
+Kui jätkate meie teenuste kasutamist pärast muudatusi, loetakse, et olete muudetud Tingimustega nõustunud.
+
+## 13. Sätete eraldatavus
+
+Kui mõni käesolevate Tingimuste säte osutub täitmisele mittekuuluvaks või kehtetuks, piiratakse või kõrvaldatakse see säte minimaalses vajalikus ulatuses ning ülejäänud sätted jäävad täies ulatuses kehtima.
+
+## 14. Kokkuleppe terviklikkus
+
+Käesolevad Tingimused koos meie privaatsuspoliitika ja muude viitega selgesõnaliselt kaasatud kokkulepetega moodustavad teie ja ettevõtte <%= @company_name %> vahelise tervikliku kokkuleppe meie teenuste kasutamise kohta.
+
+## 15. Võtke meiega ühendust
+
+Kui teil on käesolevate Tingimuste kohta küsimusi, võtke meiega palun ühendust:
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @dpo_email != "" do %>E-post: <%= @dpo_email %><% end %>

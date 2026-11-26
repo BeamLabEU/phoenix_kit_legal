@@ -1,0 +1,126 @@
+<%!-- Data Retention Policy Template --%>
+<%!-- Variables: company_name, company_address, company_country, company_website, dpo_name, dpo_email, frameworks, effective_date --%>
+
+> **DOKUMENDI MUSTAND - VAJALIK ÕIGUSLIK ÜLEVAATUS**
+>
+> See dokument on loodud automaatselt teie valitud vastavusraamistike põhjal.
+> See on põhimall, mis vastab miinimumnõuetele, kuid kvalifitseeritud õigusspetsialist
+> PEAB selle enne avaldamist üle vaatama ja kohandama.
+>
+> Viimati loodud: <%= @effective_date %>
+
+---
+
+**Jõustumise kuupäev:** <%= @effective_date %>
+
+## 1. Sissejuhatus
+
+Käesolevas andmete säilitamise põhimõttes kirjeldatakse, kuidas <%= @company_name %> („meie“ või „meid“) säilitab, haldab ja hävitab isikuandmeid kooskõlas kohaldatavate andmekaitseõigusaktidega<%= if "gdpr" in @frameworks, do: ", sealhulgas isikuandmete kaitse üldmäärusega (GDPR)", else: "" %>.
+
+## 2. Eesmärk
+
+Käesoleva põhimõtte eesmärk on:
+- tagada, et isikuandmeid ei säilitataks kauem, kui on vajalik
+- täita õiguslikke ja regulatiivseid nõudeid
+- kaitsta andmesubjektide õigusi
+- kehtestada selged menetlused andmete säilitamiseks ja kustutamiseks
+
+## 3. Kohaldamisala
+
+Käesolevat põhimõtet kohaldatakse kõigile isikuandmetele, mida <%= @company_name %> töötleb, olenemata nende säilitamise vormist või andmekandjast.
+
+<%= if @dpo_name != "" or @dpo_email != "" do %>
+## 4. Vastutav isik
+
+**Andmekaitseametnik:**
+<%= if @dpo_name != "" do %>- **Nimi:** <%= @dpo_name %><% end %>
+<%= if @dpo_email != "" do %>- **E-post:** <%= @dpo_email %><% end %>
+<%= if @dpo_phone != "" do %>- **Telefon:** <%= @dpo_phone %><% end %>
+<% end %>
+
+## 5. Säilitamistähtajad
+
+Järgmises tabelis on esitatud meie tavapärased säilitamistähtajad isikuandmete eri kategooriate puhul:
+
+| Andmekategooria | Säilitamistähtaeg | Õiguslik alus |
+|---------------|------------------|-------------|
+| **Kontoandmed** | Konto kehtivusaeg + 3 aastat | Lepingu täitmise vajadus, õiguslikud kohustused |
+| **Tehinguandmed** | 7 aastat tehingu kuupäevast | Maksu- ja raamatupidamisnõuded |
+| **Suhtlusandmed** | 3 aastat viimasest kontaktist | Õigustatud huvi, õigusnõuded |
+| **Turunduseelistused** | Kuni nõusoleku tagasivõtmiseni + 30 päeva | Nõusolek |
+| **Veebisaidi analüütika** | 26 kuud | Õigustatud huvi |
+| **Juurdepääsulogid** | 12 kuud | Turvalisus, õigusnõuete täitmine |
+| **Varukoopiad** | 90 päeva pärast algandmete kustutamist | Talitluspidevus |
+| **Tööavaldused** | 6 kuud (edutud), töösuhte kestus + 7 aastat (edukad) | Õiguslikud kohustused, õigustatud huvi |
+| **Lepingudokumendid** | Lepingu kehtivusaeg + 10 aastat | Õigusnõuded |
+| **Tugipöördumised** | 3 aastat lahendamisest | Teenuse täiustamine, õigusnõuded |
+
+*Märkus: need tähtajad võivad sõltuvalt teie jurisdiktsiooni konkreetsetest õigusnõuetest erineda.*
+
+## 6. Säilitamise põhimõtted
+
+<%= if "gdpr" in @frameworks or "uk_gdpr" in @frameworks do %>
+### 6.1 GDPR põhimõtted
+
+Kooskõlas isikuandmete kaitse üldmääruse (GDPR) artikli 5 lõike 1 punktiga e peavad isikuandmed olema:
+
+- säilitatud kujul, mis võimaldab andmesubjekte tuvastada ainult seni, kuni see on vajalik
+- töödeldud viisil, mis tagab asjakohase turvalisuse
+- korrapäraselt üle vaadatud, et hinnata nende säilitamise vajalikkust
+<% end %>
+
+### 6.2 Üldpõhimõtted
+
+- **Vajalikkus:** andmeid säilitatakse ainult seni, kuni see on nende algse eesmärgi jaoks vajalik
+- **Õigsus:** säilitatavad andmed hoitakse õiged ja ajakohased
+- **Turvalisus:** säilitatavaid andmeid kaitstakse asjakohaste turvameetmetega
+- **Vastutus:** säilitamisotsused dokumenteeritakse selgelt
+
+## 7. Andmete hävitamine
+
+Säilitamistähtaja möödumisel isikuandmed:
+
+### 7.1 Elektroonilised andmed
+- kustutatakse turvaliselt valdkonnas tunnustatud meetoditega
+- eemaldatakse kõigist varundussüsteemidest varukoopiate säilitamistsükli jooksul
+- anonüümitakse, kui täielik kustutamine ei ole võimalik
+
+### 7.2 Paberdokumendid
+- purustatakse ristlõikega paberipurustitega
+- hävitatakse sertifitseeritud hävitamisteenuse kaudu
+- dokumenteeritakse vajaduse korral hävitamistõenditega
+
+## 8. Erandid tavapärasest säilitamisest
+
+Andmeid võidakse säilitada kauem kui tavapärane tähtaeg, kui see on:
+- nõutav seaduse või järelevalveasutuse poolt
+- vajalik pooleliolevates kohtumenetlustes
+- hõlmatud õigusliku säilitamiskohustuse teatega (legal hold)
+- vajalik õigustatud ärieesmärkidel (dokumenteeritult)
+
+## 9. Andmesubjekti õigused
+
+<%= if "gdpr" in @frameworks or "uk_gdpr" in @frameworks do %>
+Andmesubjektid võivad taotleda:
+- teavet selle kohta, kui kaua nende andmeid säilitatakse
+- oma isikuandmete kustutamist („õigus olla unustatud“)
+- töötlemise piiramist säilitamise läbivaatamise ajal
+
+Nende õiguste kasutamiseks võtke ühendust: <%= if @dpo_email != "", do: @dpo_email, else: "meie andmekaitseametnik" %>
+<% end %>
+
+## 10. Läbivaatamine ja ajakohastamine
+
+Käesolev põhimõte vaadatakse üle kord aastas ja seda ajakohastatakse vastavalt vajadusele, et kajastada:
+- muudatusi õigusnõuetes
+- äriprotsesside muudatusi
+- tehnoloogia arengut
+- andmekaitseintsidentidest saadud õppetunde
+
+## 11. Kontaktandmed
+
+Käesoleva andmete säilitamise põhimõtte kohta küsimuste korral võtke palun ühendust:
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @dpo_email != "" do %>E-post: <%= @dpo_email %><% end %>

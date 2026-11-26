@@ -1,0 +1,111 @@
+<%!-- Do Not Sell My Personal Information Template (CCPA) --%>
+<%!-- Variables: company_name, company_address, company_website, dpo_email, effective_date --%>
+
+> **DOKUMENDI MUSTAND - VAJALIK ÕIGUSLIK ÜLEVAATUS**
+>
+> See dokument on loodud automaatselt CCPA/CPRA nõuete täitmiseks.
+> Kvalifitseeritud õigusspetsialist PEAB selle enne avaldamist
+> üle vaatama ja kohandama.
+>
+> Viimati loodud: <%= @effective_date %>
+
+---
+
+**Jõustumise kuupäev:** <%= @effective_date %>
+
+## Teie California privaatsusõigused
+
+California tarbijate privaatsuse seadus (CCPA) ja California privaatsusõiguste seadus (CPRA) annavad California elanikele õiguse keelduda oma isikuandmete „müümisest“ või „jagamisest“.
+
+## Mida tähendab „müümine“ CCPA tähenduses?
+
+CCPA kohaselt on „müümine“ laialt määratletud kui isikuandmete jagamine, avaldamine või kättesaadavaks tegemine kolmandale isikule raha või muu väärtusliku vastutasu eest. See võib hõlmata järgmist:
+
+- andmete jagamine reklaamipartneritega
+- selliste kolmandate isikute analüütikateenuste kasutamine, mis andmeid jagavad
+- selliste küpsiste lubamine, mis jälgivad teid eri veebisaitidel
+
+## Kas me müüme teie isikuandmeid?
+
+<%= @company_name %> <%= "[müüb/ei müü]" %> isikuandmeid CCPA tähenduses. Siiski võime jagada teie andmeid kolmandate isikutega reklaami- ja analüütikaeesmärkidel, mida võidakse CCPA kohaselt käsitada „müümisena“.
+
+### Andmekategooriad, mida võime jagada
+
+| Kategooria | Näited | Kolmandad isikud |
+|----------|----------|---------------|
+| Identifikaatorid | IP-aadress, küpsiste ID-d | Analüütika, reklaam |
+| Internetitegevus | Sirvimisajalugu, otsingupäringud | Analüütika |
+| Asukohaandmed | Üldised asukohaandmed | Analüütika, reklaam |
+
+## Kuidas keelduda
+
+Oma isikuandmete müümisest või jagamisest saate keelduda mis tahes järgmisel viisil:
+
+### 1. Taotlus veebis
+
+Klõpsake alloleval nupul, et esitada keeldumistaotlus:
+
+**[Ära müü minu isikuandmeid]**
+
+### 2. Taotlus e-posti teel
+
+Saatke e-kiri aadressile: <%= if @dpo_email != "", do: @dpo_email, else: "[privacy@teieettevote.com]" %>
+
+Lisage:
+- teemareale: „CCPA keeldumistaotlus“
+- oma nimi ja teie kontoga seotud e-posti aadress
+- avaldus, et soovite keelduda oma isikuandmete müümisest
+
+### 3. Brauseri seaded
+
+Saate oma brauseris lubada ülemaailmse privaatsuskontrolli (Global Privacy Control, GPC). Käsitame GPC signaale kehtiva keeldumistaotlusena.
+
+GPC-d toetavad brauserid:
+- Firefox (laiendusega)
+- Brave
+- DuckDuckGo
+
+## Mis juhtub pärast keeldumist
+
+Kui olete keeldumistaotluse esitanud:
+
+1. **Kohene mõju:** lõpetame teie isikuandmete müümise kolmandatele isikutele 15 tööpäeva jooksul
+2. **Olemasolevad andmed:** juhendame kolmandaid isikuid lõpetama varem jagatud andmete kasutamise
+3. **Küpsised:** mittehädavajalikud jälgimisküpsised lülitatakse välja
+4. **Mõju kontole:** see ei mõjuta teie kontot ega juurdepääsu teenustele
+
+## Isiku kontrollimine
+
+Teie privaatsuse kaitsmiseks võime enne teie taotluse menetlemist teie isikut kontrollida. Võime küsida:
+- e-posti aadressi kinnitamist
+- konto sisselogimisandmeid
+- täiendavat isikut tuvastavat teavet
+
+## Volitatud esindajad
+
+Võite määrata volitatud esindaja, kes esitab taotlusi teie nimel. Esindaja peab esitama:
+- teie allkirjastatud kirjaliku volituse
+- tõendi esindaja isiku kohta
+- tõendi teie isiku kohta
+
+## Teie muud CCPA õigused
+
+Lisaks keeldumisele on teil õigus:
+
+- **Teada:** taotleda teavet isikuandmete kohta, mida me kogume, kasutame ja avaldame
+- **Kustutada:** taotleda oma isikuandmete kustutamist
+- **Parandada:** taotleda ebatäpsete isikuandmete parandamist
+- **Piirata kasutamist:** piirata delikaatsete isikuandmete kasutamist
+- **Mittediskrimineerimisele:** et teid ei koheldaks oma õiguste kasutamise eest diskrimineerivalt
+
+## Võtke meiega ühendust
+
+Selle lehe kohta küsimuste korral või oma õiguste kasutamiseks võtke meiega ühendust:
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @dpo_email != "" do %>E-post: <%= @dpo_email %><% end %>
+
+---
+
+**Viimati uuendatud:** <%= @effective_date %>
