@@ -203,3 +203,116 @@ test('a remounted hook drops expired in-memory grants', () => {
   const update = f.context.dataLayer.filter(args => args[1] === 'update').at(-1);
   assert.equal(update[2].analytics_storage, 'denied');
 });
+
+// ---------------------------------------------------------------------------
+// Content-Security-Policy: no inline handler, a nonce on what the script creates
+// ---------------------------------------------------------------------------
+
+const click = action => ({
+  target: {
+    closest: selector => selector === '[data-pkl-consent]'
+      ? { getAttribute: () => action }
+      : null
+  }
+});
+
+test('a button that names its action is answered by one document listener', () => {
+  const f = fixture();
+  assert.equal(f.listeners.get('click').length, 1);
+
+  f.emit('click', click('acceptAll'));
+  assert.equal(f.consent.getConsent().analytics, true);
+
+  f.emit('click', click('rejectAll'));
+  assert.equal(f.consent.getConsent().analytics, false);
+});
+
+test('a click names only the five widget actions, and a click elsewhere is ignored', () => {
+  const f = fixture(decision(true));
+  f.emit('click', click('revokeConsent'));
+  f.emit('click', click('constructor'));
+  f.emit('click', { target: { closest: () => null } });
+  f.emit('click', { target: {} });
+  assert.equal(f.consent.getConsent().analytics, true);
+});
+
+test('a released script keeps the nonce of the tag it replaces', () => {
+  const f = fixture();
+  const created = [];
+  let replaced = null;
+  const blocked = {
+    // What a browser shows under a policy: the attribute emptied, the value on the property.
+    attributes: [
+      { name: 'type', value: 'text/plain' }, { name: 'data-blocked', value: 'true' },
+      { name: 'nonce', value: '' }, { name: 'data-consent-category', value: 'analytics' }
+    ],
+    nonce: 'page-nonce', src: '', textContent: 'track()',
+    parentNode: { replaceChild: (fresh) => { replaced = fresh; } }
+  };
+  f.context.document.querySelectorAll = selector =>
+    selector.includes('"analytics"') ? [blocked] : [];
+  f.context.document.createElement = tag => {
+    const el = { tag, attrs: {}, setAttribute(name, value) { this.attrs[name] = value; } };
+    created.push(el);
+    return el;
+  };
+
+  f.consent.acceptAll();
+
+  assert.equal(replaced.tag, 'script');
+  assert.equal(replaced.nonce, 'page-nonce');
+  assert.equal('nonce' in replaced.attrs, false);
+  assert.equal(replaced.attrs['data-consent-category'], 'analytics');
+  assert.equal(replaced.textContent, 'track()');
+});
+
+async function injected(f) {
+  const appended = [];
+  const styles = [];
+  let html = null;
+  f.context.document.createElement = tag => {
+    if (tag === 'style') {
+      const style = { tag };
+      styles.push(style);
+      return style;
+    }
+    const root = { children: [], firstChild: null, insertBefore(el) { this.children.unshift(el); } };
+    return { set innerHTML(value) { html = value; }, firstChild: root };
+  };
+  f.context.document.body = { appendChild: el => appended.push(el) };
+  f.elements.delete('pk-consent-root');
+  f.context.PhoenixKitHooks.CookieConsent.destroyed();
+  f.consent.init();
+  f.requests.at(-1).resolve(response({ enabled: true, frameworks: ['gdpr'] }));
+  await settle();
+  await settle();
+  return { appended, styles, html };
+}
+
+test('the injected widget carries no inline handler and no <style> in its HTML', async () => {
+  const f = fixture();
+  const { appended, styles, html } = await injected(f);
+
+  assert.equal(appended.length, 1);
+  assert.doesNotMatch(html, /\son[a-z]+=/);
+  assert.doesNotMatch(html, /<style/);
+  assert.equal((html.match(/data-pkl-consent="/g) || []).length, 8);
+  assert.equal(styles.length, 1);
+  assert.equal(appended[0].children[0], styles[0]);
+  assert.match(styles[0].textContent, /\.pk-consent-widget\{/);
+  assert.equal(styles[0].nonce, undefined);
+});
+
+test("the injected widget's <style> is stamped by core's bundle when it is there", async () => {
+  const f = fixture();
+  f.context.PhoenixKitInternals = { adoptStyle: el => { el.nonce = 'from-core'; return el; } };
+  const { styles } = await injected(f);
+  assert.equal(styles[0].nonce, 'from-core');
+});
+
+test("without core's bundle the <style> takes the nonce of a style already on the page", async () => {
+  const f = fixture();
+  f.context.document.getElementsByTagName = () => [{ nonce: '' }, { nonce: 'from-page' }];
+  const { styles } = await injected(f);
+  assert.equal(styles[0].nonce, 'from-page');
+});

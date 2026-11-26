@@ -30,6 +30,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
 
   alias PhoenixKit.Modules.Legal
   alias PhoenixKit.Modules.Legal.Consent
+  alias PhoenixKit.Modules.Legal.Web.CSP
   alias PhoenixKit.Users.Auth.Scope
 
   @opt_in_frameworks ~w(gdpr uk_gdpr lgpd pipeda)
@@ -151,7 +152,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
       class={["pk-consent-widget", @class]}
     >
       <%!-- Custom Styles using daisyUI CSS variables --%>
-      <style>
+      <style nonce={CSP.nonce(:style)}>
         .pk-consent-widget {
           --pk-bg: oklch(var(--b1));
           --pk-bg-alt: oklch(var(--b2));
@@ -246,7 +247,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
         <button
           id="pk-consent-icon"
           type="button"
-          onclick="window.PhoenixKitConsent?.openPreferences()"
+          data-pkl-consent="openPreferences"
           class={[
             "pk-floating-icon pk-glass fixed z-50 w-12 h-12 rounded-full",
             "flex items-center justify-center cursor-pointer",
@@ -302,21 +303,21 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
             <div class="flex items-center gap-2 w-full sm:w-auto">
               <button
                 type="button"
-                onclick="window.PhoenixKitConsent?.openPreferences()"
+                data-pkl-consent="openPreferences"
                 class="btn btn-ghost btn-sm flex-1 sm:flex-none text-xs sm:text-sm"
               >
                 {gettext("Customize")}
               </button>
               <button
                 type="button"
-                onclick="window.PhoenixKitConsent?.rejectAll()"
+                data-pkl-consent="rejectAll"
                 class="btn btn-outline btn-sm flex-1 sm:flex-none text-xs sm:text-sm"
               >
                 {gettext("Reject")}
               </button>
               <button
                 type="button"
-                onclick="window.PhoenixKitConsent?.acceptAll()"
+                data-pkl-consent="acceptAll"
                 class="btn btn-primary btn-sm flex-1 sm:flex-none text-xs sm:text-sm"
               >
                 {gettext("Accept All")}
@@ -337,7 +338,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
         <%!-- Backdrop --%>
         <div
           class="pk-modal-backdrop absolute inset-0 bg-base-100/70 backdrop-blur-sm"
-          onclick="window.PhoenixKitConsent?.closePreferences()"
+          data-pkl-consent="closePreferences"
         >
         </div>
 
@@ -363,7 +364,7 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
               </div>
               <button
                 type="button"
-                onclick="window.PhoenixKitConsent?.closePreferences()"
+                data-pkl-consent="closePreferences"
                 class="btn btn-ghost btn-sm btn-circle"
                 aria-label={gettext("Close")}
               >
@@ -447,14 +448,14 @@ defmodule PhoenixKit.Modules.Legal.CookieConsent do
                 <div class="flex items-center gap-2 sm:ml-auto">
                   <button
                     type="button"
-                    onclick="window.PhoenixKitConsent?.rejectAll()"
+                    data-pkl-consent="rejectAll"
                     class="btn btn-ghost btn-sm flex-1 sm:flex-none text-xs"
                   >
                     {gettext("Reject All")}
                   </button>
                   <button
                     type="button"
-                    onclick="window.PhoenixKitConsent?.savePreferences()"
+                    data-pkl-consent="savePreferences"
                     class="btn btn-primary btn-sm flex-1 sm:flex-none text-xs"
                   >
                     {gettext("Save Preferences")}

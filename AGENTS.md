@@ -119,6 +119,24 @@ breaks consumers, never this repo).
   copy; a change to the banner made only here is invisible on most hosts
   without it. `LiveViewTest` runs no browser JS — verify banner changes in a
   browser, on a host page that has no component in its layout.
+- **Content-Security-Policy:** the widget has to pass a host's nonce policy
+  (`script-src 'self' 'nonce-…'`). An inline `<style>`/`<script>` in `lib/`
+  takes `nonce={CSP.nonce(:style)}` from `PhoenixKit.Modules.Legal.Web.CSP`
+  (it asks core's `PhoenixKitWeb.CSP` when the core has one and answers `nil`
+  otherwise — never call core's module directly, the published core floor
+  lacks it). **No inline event handlers**, in the component or in HTML the
+  script builds: a button names its action with `data-pkl-consent="acceptAll"`
+  (`openPreferences`, `closePreferences`, `acceptAll`, `rejectAll`,
+  `savePreferences`) and the one document listener in
+  `phoenix_kit_consent.js` runs it. Not `data-pk-consent`: core's bundled copy
+  listens for that and calls `window.PhoenixKitConsent`, so sharing the name
+  runs every click twice. A `<style>` the script creates is an element
+  stamped with `adoptStyle(el)` before insertion, never a tag inside an
+  `innerHTML` string; a released script copies `script.nonce`. The widget's
+  `style="…"` attributes still need `style-src-attr 'unsafe-inline'`.
+  `test/phoenix_kit_legal/web/csp_inline_tags_test.exs` fails on a tag
+  without the nonce or a handler attribute; `test/javascript/consent_test.cjs`
+  runs the listener and the stamping.
 - **`enabled?/0`** must survive a missing database and return `false`. It reads
   `Settings.get_boolean_setting("legal_enabled", false)`, whose rescue in core
   supplies that; do not replace it with a bare Repo call.

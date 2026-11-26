@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The cookie-consent widget works under a nonce Content-Security-Policy**
+  (`script-src 'self' 'nonce-…'`, no `'unsafe-inline'`). Its buttons no longer
+  carry inline `onclick` handlers: they name their action
+  (`data-pkl-consent="acceptAll"`) and one document listener in
+  `phoenix_kit_consent.js` answers them, in the server-rendered component and
+  in the widget the script injects alike. The component's `<style>` carries
+  the host's nonce when core has one (`PhoenixKitWeb.CSP`, feature-detected:
+  on an older core nothing changes); the injected widget's `<style>` is built
+  as an element and stamped with the page's style nonce instead of being
+  written into `innerHTML`.
+- A host page that calls the widget from its own markup keeps working through
+  `window.PhoenixKitConsent.openPreferences()` and friends; markup under a
+  strict policy can use `data-pkl-consent="openPreferences"` instead.
+
+### Fixed
+
+- A script released once its category is accepted
+  (`<script type="text/plain" data-consent-category="…">`) keeps the nonce of
+  the tag it replaces. The browser hides the nonce from the attribute list, so
+  the copy had none and a nonce policy blocked the script the visitor had just
+  allowed.
+
 ## 0.6.0 - 2026-10-13
 
 ### Added

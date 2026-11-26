@@ -133,6 +133,28 @@ defmodule PhoenixKit.Modules.Legal.CookieConsentTest do
     end
   end
 
+  describe "under a Content-Security-Policy" do
+    test "the buttons name their action and carry no inline handler" do
+      html = render(phoenix_kit_current_scope: nil)
+
+      refute html =~ "onclick"
+
+      actions =
+        ~r/data-pkl-consent="(\w+)"/
+        |> Regex.scan(html, capture: :all_but_first)
+        |> List.flatten()
+
+      # Icon, banner (customize / reject / accept), backdrop, close, modal footer (reject / save).
+      assert actions ==
+               ~w(openPreferences openPreferences rejectAll acceptAll closePreferences
+                  closePreferences rejectAll savePreferences)
+    end
+
+    test "with no nonce from the host the <style> has no nonce attribute" do
+      assert render(phoenix_kit_current_scope: nil) =~ "<style>"
+    end
+  end
+
   test "renders full widget for unknown struct (scope ignored, no crash)" do
     html = render(phoenix_kit_current_scope: %URI{host: "example.com"})
     assert html =~ "pk-consent-root"

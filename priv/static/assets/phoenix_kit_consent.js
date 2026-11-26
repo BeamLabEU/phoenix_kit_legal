@@ -726,10 +726,15 @@
     scripts.forEach(function(script) {
       var newScript = document.createElement("script");
       Array.from(script.attributes).forEach(function(attr) {
-        if (attr.name !== "type" && attr.name !== "data-blocked") {
+        if (attr.name !== "type" && attr.name !== "data-blocked" && attr.name !== "nonce") {
           newScript.setAttribute(attr.name, attr.value);
         }
       });
+      // Under a Content-Security-Policy the browser empties a script's nonce
+      // attribute and keeps the value on `script.nonce`: copying attributes
+      // would hand the replacement an empty one, and the policy would block
+      // the very script the visitor has just allowed.
+      if (script.nonce) newScript.nonce = script.nonce;
       if (script.src) {
         newScript.src = script.src;
       } else {
@@ -774,9 +779,11 @@
     var showIcon = isOptInMode();
     var iconStyle = getIconPositionClass(config.icon_position || config.iconPosition);
 
-    // Use daisyUI CSS variables for theme support
-    return '<div id="pk-consent-root" class="pk-consent-widget">' +
-      '<style>' +
+    // The widget's rules, daisyUI CSS variables for theme support. Not a
+    // <style> inside the HTML below: `innerHTML` cannot give one a nonce, so
+    // a nonce Content-Security-Policy would drop it. `injectWidget` builds
+    // the element and stamps it.
+    var styles =
         // CSS variables using daisyUI theme colors
         '.pk-consent-widget{' +
           '--pk-bg:oklch(var(--b1));' +
@@ -804,12 +811,12 @@
         '.pk-category-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px oklch(var(--bc)/0.1)}' +
         '.pk-toggle-track{background:var(--pk-border);transition:background 0.2s}' +
         '.pk-toggle-track.active{background:var(--pk-primary)}' +
-        '.pk-toggle-thumb{background:var(--pk-bg);box-shadow:0 1px 3px oklch(var(--bc)/0.2)}' +
-      '</style>' +
+        '.pk-toggle-thumb{background:var(--pk-bg);box-shadow:0 1px 3px oklch(var(--bc)/0.2)}';
 
+    var html = '<div id="pk-consent-root" class="pk-consent-widget">' +
       // Floating Icon - using theme colors
       (showIcon ?
-        '<button id="pk-consent-icon" type="button" onclick="window.PhoenixKitConsent.openPreferences()" ' +
+        '<button id="pk-consent-icon" type="button" data-pkl-consent="openPreferences" ' +
         'class="pk-floating-icon pk-glass" ' +
         'style="position:fixed;z-index:50;width:3rem;height:3rem;border-radius:9999px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--pk-primary);' + iconStyle + '" ' +
         'aria-label="' + escapeAttr(t("icon_aria_label", "Cookie preferences")) + '" title="' + escapeAttr(t("icon_aria_label", "Cookie preferences")) + '">' +
@@ -837,9 +844,9 @@
               '</div>' +
             '</div>' +
             '<div style="display:flex;gap:0.5rem;flex-wrap:wrap">' +
-              '<button type="button" onclick="window.PhoenixKitConsent.openPreferences()" class="btn btn-ghost btn-sm" style="font-size:0.75rem">' + escapeText(t("customize", "Customize")) + '</button>' +
-              '<button type="button" onclick="window.PhoenixKitConsent.rejectAll()" class="btn btn-outline btn-sm" style="font-size:0.75rem">' + escapeText(t("reject", "Reject")) + '</button>' +
-              '<button type="button" onclick="window.PhoenixKitConsent.acceptAll()" class="btn btn-primary btn-sm" style="font-size:0.75rem">' + escapeText(t("accept_all", "Accept All")) + '</button>' +
+              '<button type="button" data-pkl-consent="openPreferences" class="btn btn-ghost btn-sm" style="font-size:0.75rem">' + escapeText(t("customize", "Customize")) + '</button>' +
+              '<button type="button" data-pkl-consent="rejectAll" class="btn btn-outline btn-sm" style="font-size:0.75rem">' + escapeText(t("reject", "Reject")) + '</button>' +
+              '<button type="button" data-pkl-consent="acceptAll" class="btn btn-primary btn-sm" style="font-size:0.75rem">' + escapeText(t("accept_all", "Accept All")) + '</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -847,7 +854,7 @@
 
       // Modal - using theme colors
       '<div id="pk-consent-modal" style="position:fixed;inset:0;z-index:100;display:none" role="dialog" aria-modal="true" aria-label="' + escapeAttr(t("icon_aria_label", "Cookie preferences")) + '">' +
-        '<div class="pk-modal-backdrop" onclick="window.PhoenixKitConsent.closePreferences()" style="position:absolute;inset:0;background:oklch(var(--bc)/0.4);backdrop-filter:blur(4px)"></div>' +
+        '<div class="pk-modal-backdrop" data-pkl-consent="closePreferences" style="position:absolute;inset:0;background:oklch(var(--bc)/0.4);backdrop-filter:blur(4px)"></div>' +
         '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;pointer-events:none">' +
           '<div class="pk-modal-content pk-glass" style="width:100%;max-width:28rem;max-height:85vh;overflow:hidden;border-radius:1rem;pointer-events:auto">' +
             // Modal Header
@@ -863,7 +870,7 @@
                   '<p style="font-size:0.75rem;color:var(--pk-text-muted);margin:0">' + escapeText(t("modal_subtitle", "Manage your cookie settings")) + '</p>' +
                 '</div>' +
               '</div>' +
-              '<button type="button" onclick="window.PhoenixKitConsent.closePreferences()" class="btn btn-ghost btn-sm btn-circle" aria-label="' + escapeAttr(t("modal_close_aria", "Close")) + '">' +
+              '<button type="button" data-pkl-consent="closePreferences" class="btn btn-ghost btn-sm btn-circle" aria-label="' + escapeAttr(t("modal_close_aria", "Close")) + '">' +
                 '<svg style="width:1.25rem;height:1.25rem" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">' +
                   '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>' +
                 '</svg>' +
@@ -885,8 +892,8 @@
                   '<a href="' + escapeAttr(config.cookie_policy_url || '/legal/cookie-policy') + '" style="color:inherit;text-decoration:underline" target="_blank">' + escapeText(t("cookie_policy_label", "Cookie Policy")) + '</a>' +
                 '</div>' +
                 '<div style="margin-left:auto;display:flex;gap:0.5rem">' +
-                  '<button type="button" onclick="window.PhoenixKitConsent.rejectAll()" class="btn btn-ghost btn-sm" style="font-size:0.75rem">' + escapeText(t("reject_all", "Reject All")) + '</button>' +
-                  '<button type="button" onclick="window.PhoenixKitConsent.savePreferences()" class="btn btn-primary btn-sm" style="font-size:0.75rem">' + escapeText(t("save_preferences", "Save Preferences")) + '</button>' +
+                  '<button type="button" data-pkl-consent="rejectAll" class="btn btn-ghost btn-sm" style="font-size:0.75rem">' + escapeText(t("reject_all", "Reject All")) + '</button>' +
+                  '<button type="button" data-pkl-consent="savePreferences" class="btn btn-primary btn-sm" style="font-size:0.75rem">' + escapeText(t("save_preferences", "Save Preferences")) + '</button>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -894,6 +901,8 @@
         '</div>' +
       '</div>' +
     '</div>';
+
+    return { css: styles, html: html };
   }
 
   function createCategoryHTML(id, icon, name, description, required, covers) {
@@ -925,6 +934,26 @@
     '</div>';
   }
 
+  // A <style> created here is dropped by `style-src 'nonce-…'` unless it
+  // carries the page's style nonce before it joins the document. Core's
+  // bundle knows where to find it; without that bundle (or on a core that
+  // predates it), a <style> already on the page is asked. No nonce found
+  // means no nonce policy this script can satisfy, and none is set.
+  function adoptStyle(el) {
+    var internals = window.PhoenixKitInternals;
+    if (internals && typeof internals.adoptStyle === "function") {
+      return internals.adoptStyle(el);
+    }
+    var list = document.getElementsByTagName ? document.getElementsByTagName("style") : [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].nonce) {
+        el.nonce = list[i].nonce;
+        break;
+      }
+    }
+    return el;
+  }
+
   function injectWidget(config) {
     // Remove existing widget if any
     var existing = document.getElementById("pk-consent-root");
@@ -933,9 +962,15 @@
     }
 
     // Create widget container
+    var built = createWidgetHTML(config);
     var container = document.createElement("div");
-    container.innerHTML = createWidgetHTML(config);
-    document.body.appendChild(container.firstChild);
+    container.innerHTML = built.html;
+    var root = container.firstChild;
+    var style = document.createElement("style");
+    adoptStyle(style);
+    style.textContent = built.css;
+    root.insertBefore(style, root.firstChild);
+    document.body.appendChild(root);
 
     log("Widget injected into DOM");
   }
@@ -1116,6 +1151,36 @@
     });
     log("Consent revoked");
   };
+
+  // =====================================================
+  // BUTTONS
+  // =====================================================
+  //
+  // The widget's buttons name their action (`data-pkl-consent="acceptAll"`),
+  // in the server-rendered component and in the widget injected above alike.
+  // An inline `onclick` is blocked by a Content-Security-Policy without
+  // 'unsafe-inline', and no nonce can be put on an attribute.
+  //
+  // The attribute is this script's own. Core's bundled copy listens for
+  // `data-pk-consent` and calls `window.PhoenixKitConsent` — this object,
+  // once it is retired — so sharing the name would run every click twice.
+
+  var CONSENT_ACTIONS = ["openPreferences", "closePreferences", "acceptAll", "rejectAll", "savePreferences"];
+
+  function onConsentClick(e) {
+    var el = e.target && typeof e.target.closest === "function"
+      ? e.target.closest("[data-pkl-consent]")
+      : null;
+    if (!el) return;
+    var action = el.getAttribute("data-pkl-consent");
+    if (CONSENT_ACTIONS.indexOf(action) === -1) return;
+    // The global, as the inline handlers called it: a host may have wrapped
+    // a method there.
+    var api = window.PhoenixKitConsent || PhoenixKitConsent;
+    if (typeof api[action] === "function") api[action]();
+  }
+
+  document.addEventListener("click", onConsentClick);
 
   // =====================================================
   // INITIALIZATION
