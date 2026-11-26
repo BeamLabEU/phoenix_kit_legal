@@ -495,7 +495,10 @@
             marketing: !!consent.marketing,
             preferences: !!consent.preferences
           },
-          source: source
+          source: source,
+          // The language the banner and policies were shown in; the server
+          // records it with the decision (and which policy text it was).
+          locale: (document.documentElement && document.documentElement.lang) || null
         })
       }).then(function(response) {
         if (!response.ok) log("Consent endpoint returned " + response.status);

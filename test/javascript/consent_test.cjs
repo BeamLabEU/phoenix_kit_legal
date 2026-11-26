@@ -46,6 +46,7 @@ function fixture(stored = null, pending = false) {
     localStorage: storage(data), sessionStorage: storage(new Map()),
     document: {
       readyState: 'complete', getElementById: id => elements.get(id),
+      documentElement: { lang: 'et' },
       querySelectorAll: () => [], addEventListener: on
     },
     addEventListener: on, dispatchEvent: event => events.push(event),
@@ -90,6 +91,13 @@ test('a pending reconciliation cannot re-post grants after revocation', async ()
   get.resolve(response({decided: false}));
   await settle();
   assert.equal(f.requests.filter(r => r.method === 'POST').length, 0);
+});
+
+test('a decision reports the page language', async () => {
+  const f = fixture();
+  f.consent.acceptAll();
+  await settle();
+  assert.equal(JSON.parse(f.requests[0].body).locale, 'et');
 });
 
 test('rapid decisions reach the server in order', async () => {

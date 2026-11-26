@@ -55,7 +55,11 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   @doc "Records a decision and sets the consent cookie."
   @spec record(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def record(conn, %{"consent" => categories} = params) when is_map(categories) do
-    opts = [source: params["source"], user_uuid: current_user_uuid(conn)]
+    opts = [
+      source: params["source"],
+      user_uuid: current_user_uuid(conn),
+      locale: request_locale(conn, params)
+    ]
 
     case Consent.record(conn, categories, opts) do
       {:ok, conn, consent} ->
@@ -74,8 +78,23 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   @spec forget(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def forget(conn, _params) do
     conn
-    |> Consent.forget(source: "preferences", user_uuid: current_user_uuid(conn))
+    |> Consent.forget(
+      source: "preferences",
+      user_uuid: current_user_uuid(conn),
+      locale: request_locale(conn, conn.params)
+    )
     |> json(%{decided: false, gpc: Consent.objected?(conn)})
+  end
+
+  # The language the visitor saw: the page's `<html lang>` the banner sends,
+  # else the first `Accept-Language` tag. Only a well-formed language code
+  # is kept (`Legal.clean_locale/1`); anything else records nil.
+  defp request_locale(conn, params) do
+    Legal.clean_locale(params["locale"]) ||
+      case get_req_header(conn, "accept-language") do
+        [header | _] -> header |> String.split([",", ";"]) |> hd() |> Legal.clean_locale()
+        [] -> nil
+      end
   end
 
   defp body(conn, consent) do

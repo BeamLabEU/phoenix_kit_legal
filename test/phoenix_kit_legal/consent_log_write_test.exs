@@ -100,6 +100,31 @@ defmodule PhoenixKit.Modules.Legal.ConsentLogWriteTest do
     end)
   end
 
+  test "with :locale, records the language, the policy language and the template versions" do
+    PhoenixKit.Cache.put(:settings, "legal_frameworks", %{"items" => ["gdpr"]})
+    PhoenixKit.Cache.put(:settings, "legal_page_templates", %{})
+
+    in_shadow_table(fn ->
+      {:ok, _conn, _recorded} =
+        Consent.record(request(), %{"analytics" => true}, version: "1.0", locale: "et-EE")
+
+      for row <- rows() do
+        assert row.metadata["locale"] == "et-EE"
+        assert row.metadata["policy_locale"] == "et"
+
+        assert %{"privacy-policy" => "sha256:" <> _, "cookie-policy" => "sha256:" <> _} =
+                 row.metadata["template_versions"]
+
+        assert row.metadata["source"] == "banner"
+      end
+    end)
+
+    in_shadow_table(fn ->
+      {:ok, _conn, _} = Consent.record(request(), %{}, version: "1.0", locale: "de")
+      assert Enum.all?(rows(), &(&1.metadata["policy_locale"] == "en"))
+    end)
+  end
+
   test "keeps no address and no User-Agent unless the settings ask" do
     headers = [{"user-agent", "Mozilla/5.0 Test"}, {"sec-gpc", "1"}]
 
