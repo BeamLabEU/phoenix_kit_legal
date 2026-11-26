@@ -529,7 +529,8 @@ shared.
 - calls `PhoenixKit.Modules.Legal.Test.DatabaseGuard.validate!/1` on the
   resolved database name before anything else — it raises unless the name is
   this package's own disposable fixture (`phoenix_kit_legal_test`, optionally
-  partition-suffixed), never another package's or core's own test/dev
+  partition-suffixed and/or with a `pk<N>_` box prefix such as
+  `pk3_phoenix_kit_legal_test`), never another package's or core's own test/dev
   database. This suite runs real DDL, so the check happens before any
   connection is attempted, not after;
 - probes `PhoenixKit.Modules.Legal.Test.Repo`'s connection once (trapping

@@ -13,6 +13,20 @@ defmodule PhoenixKit.Modules.Legal.Test.DatabaseGuardTest do
       assert DatabaseGuard.safe?("phoenix_kit_legal_test42")
     end
 
+    test "accepts this package's own database under a pk<N>_ box prefix" do
+      assert DatabaseGuard.safe?("pk3_phoenix_kit_legal_test")
+      assert DatabaseGuard.safe?("pk12_phoenix_kit_legal_test2")
+    end
+
+    test "rejects a box prefix on anything but this package's own database" do
+      refute DatabaseGuard.safe?("pk3_phoenix_kit_test")
+      refute DatabaseGuard.safe?("pk3_phoenix_kit_billing_test")
+      refute DatabaseGuard.safe?("pk3_dev")
+      refute DatabaseGuard.safe?("pk_phoenix_kit_legal_test")
+      refute DatabaseGuard.safe?("pkx_phoenix_kit_legal_test")
+      refute DatabaseGuard.safe?("other_pk3_phoenix_kit_legal_test")
+    end
+
     test "rejects core's own shared test fixture" do
       refute DatabaseGuard.safe?("phoenix_kit_test")
     end

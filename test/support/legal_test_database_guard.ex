@@ -10,14 +10,17 @@ defmodule PhoenixKit.Modules.Legal.Test.DatabaseGuard do
   touch it.
   """
 
-  @pattern ~r/^phoenix_kit_legal_test\d*$/
+  @pattern ~r/^(pk\d+_)?phoenix_kit_legal_test\d*$/
 
   @doc """
   Whether `name` is this package's own disposable test database — always
   `phoenix_kit_legal_test`, optionally with a numeric partition suffix
-  (`MIX_TEST_PARTITION`, e.g. `phoenix_kit_legal_test1`). An allowlist,
-  not a denylist: any other name is refused, including another package's
-  own `_test`-suffixed fixture and any shared or development database.
+  (`MIX_TEST_PARTITION`, e.g. `phoenix_kit_legal_test1`) and optionally
+  with a `pk<N>_` box prefix (`pk3_phoenix_kit_legal_test`: a shared
+  Postgres that hosts one copy of each package's fixture per dev box names
+  them this way). An allowlist, not a denylist: any other name is refused,
+  including another package's own `_test`-suffixed fixture (prefixed or
+  not) and any shared or development database.
   """
   @spec safe?(String.t()) :: boolean()
   def safe?(name), do: Regex.match?(@pattern, name)
@@ -35,7 +38,8 @@ defmodule PhoenixKit.Modules.Legal.Test.DatabaseGuard do
 
       This suite runs real DDL. Point PGDATABASE at phoenix_kit_legal_test \
       (optionally with a numeric MIX_TEST_PARTITION suffix, e.g. \
-      phoenix_kit_legal_test1) — never another package's or core's own \
+      phoenix_kit_legal_test1, and/or a pk<N>_ box prefix, e.g. \
+      pk3_phoenix_kit_legal_test) — never another package's or core's own \
       test or development database.
       """
     end
