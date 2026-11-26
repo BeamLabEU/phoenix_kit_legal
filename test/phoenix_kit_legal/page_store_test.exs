@@ -27,6 +27,14 @@ defmodule PhoenixKit.Modules.Legal.PageStoreTest do
     refute PageStore.available?()
   end
 
+  @tag :capture_log
+  test "a misconfigured store is ignored, never crashes" do
+    for bad <- [false, true, "MyApp.Store", Nope.NotAModule, Enum] do
+      Application.put_env(:phoenix_kit_legal, :page_store, bad)
+      assert PageStore.adapter() == PageStore.Publishing, "#{inspect(bad)}"
+    end
+  end
+
   test "None stores nothing and says so" do
     none = PageStore.None
     refute none.enabled?()

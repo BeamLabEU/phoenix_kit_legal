@@ -49,9 +49,34 @@ defmodule PhoenixKit.Modules.Legal.PageStore do
   @spec adapter() :: module()
   def adapter do
     case Application.get_env(:phoenix_kit_legal, :page_store) do
-      mod when is_atom(mod) and not is_nil(mod) -> mod
-      _ -> if publishing_installed?(), do: __MODULE__.Publishing, else: __MODULE__.None
+      nil -> default_adapter()
+      mod -> if implements?(mod), do: mod, else: misconfigured(mod)
     end
+  end
+
+  defp default_adapter,
+    do: if(publishing_installed?(), do: __MODULE__.Publishing, else: __MODULE__.None)
+
+  # A configured store must be a loaded module with every callback; anything
+  # else (`false`, a typo, a half-written module) would crash the settings
+  # page or a page write later, so it is ignored (and logged) instead.
+  defp implements?(mod) when is_atom(mod) and mod not in [true, false] do
+    Code.ensure_loaded?(mod) and
+      Enum.all?(__MODULE__.behaviour_info(:callbacks), fn {fun, arity} ->
+        function_exported?(mod, fun, arity)
+      end)
+  end
+
+  defp implements?(_), do: false
+
+  defp misconfigured(mod) do
+    require Logger
+
+    Logger.warning(
+      "[Legal] :page_store #{inspect(mod)} is not a loaded PhoenixKit.Modules.Legal.PageStore; using the default store"
+    )
+
+    default_adapter()
   end
 
   @doc "Whether `phoenix_kit_publishing` is compiled into this application."
