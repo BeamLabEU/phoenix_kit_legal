@@ -26,6 +26,37 @@ defmodule PhoenixKit.Modules.Legal.LocalizedTemplatesTest do
     effective_date: "2026-11-26"
   }
 
+  describe "a host's own templates win over the bundled ones" do
+    defp host(files),
+      do: fn name -> if name in files, do: {:ok, "/host/" <> name}, else: :error end
+
+    test "a host's English override beats a bundled translation it has none for" do
+      assert {"/host/privacy_policy.eex", "en"} =
+               TemplateGenerator.resolve("privacy_policy.eex", "et", host(["privacy_policy.eex"]))
+    end
+
+    test "a host's own translation beats its English and the bundled one" do
+      files = ["privacy_policy.eex", "privacy_policy.et.eex"]
+
+      assert {"/host/privacy_policy.et.eex", "et"} =
+               TemplateGenerator.resolve("privacy_policy.eex", "et-EE", host(files))
+    end
+
+    test "without host overrides the bundled translation is used" do
+      assert {path, "et"} = TemplateGenerator.resolve("privacy_policy.eex", "et", host([]))
+      assert String.ends_with?(path, "privacy_policy.et.eex")
+      refute String.starts_with?(path, "/host/")
+    end
+
+    test "English asks the host first" do
+      assert {"/host/privacy_policy.eex", "en"} =
+               TemplateGenerator.resolve("privacy_policy.eex", "en", host(["privacy_policy.eex"]))
+
+      assert {path, "en"} = TemplateGenerator.resolve("privacy_policy.eex", "en", host([]))
+      assert String.ends_with?(path, "privacy_policy.eex")
+    end
+  end
+
   test "an upper-case language subtag resolves to the lower-case catalogue" do
     assert {_path, "et"} = TemplateGenerator.resolve("privacy_policy.eex", "ET")
     assert {_path, "et"} = TemplateGenerator.resolve("privacy_policy.eex", "ET-ee")

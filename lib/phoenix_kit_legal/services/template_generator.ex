@@ -103,30 +103,55 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   The template file a page in `language` is rendered from, and the locale
   that file is in: `{path, locale}`.
 
-  For `"et-EE"` it tries, in order: the parent app's `{name}.et-EE.eex`, the
-  bundled `{name}.et-EE.eex`, the parent app's `{name}.et.eex`, the bundled
-  `{name}.et.eex`, then the English base template (parent app first) with
-  locale `"en"`. The bundled templates exist in English, Estonian (`et`) and
-  Russian (`ru`); any other language falls back to English, and the locale
-  in the answer says so.
+  The host's own text wins over the bundled one. For `"et-EE"` it tries, in
+  order:
+
+    1. the parent app's `{name}.et-EE.eex`, then its `{name}.et.eex`;
+    2. the parent app's English `{name}.eex`, when the host overrode it — a
+       host that rewrote its English policy and wrote no Estonian one gets
+       its own English text, not the bundled Estonian translation of ours;
+    3. the bundled `{name}.et-EE.eex`, then `{name}.et.eex`;
+    4. the bundled English `{name}.eex`.
+
+  The locale in the answer is the file's (`"en"` after steps 2 and 4). The
+  bundled templates exist in English, Estonian (`et`) and Russian (`ru`).
   """
   @spec resolve(String.t(), String.t() | nil) :: {String.t(), String.t()}
-  def resolve(template_name, language) do
-    language
-    |> locale_candidates()
-    |> Enum.reject(&(&1 == "en"))
-    |> Enum.find_value(&localized_path(template_name, &1)) ||
-      {get_base_template_path(template_name), "en"}
+  def resolve(template_name, language),
+    do: resolve(template_name, language, &get_parent_template_path/1)
+
+  @doc false
+  # `parent` looks a file name up in the host app (`{:ok, path} | :error`);
+  # injectable so the order can be tested without a host app.
+  @spec resolve(String.t(), String.t() | nil, (String.t() -> {:ok, String.t()} | :error)) ::
+          {String.t(), String.t()}
+  def resolve(template_name, language, parent) do
+    candidates = language |> locale_candidates() |> Enum.reject(&(&1 == "en"))
+
+    find = fun_lookup(template_name, candidates)
+
+    find.(parent) ||
+      host_english(template_name, candidates, parent) ||
+      find.(&get_phoenix_kit_lang_template_path/1) ||
+      {get_phoenix_kit_template_path(template_name), "en"}
   end
 
-  defp localized_path(template_name, locale) do
-    lang_name = localized_template_name(template_name, locale)
+  defp fun_lookup(template_name, candidates) do
+    fn lookup ->
+      Enum.find_value(candidates, fn locale ->
+        case lookup.(localized_template_name(template_name, locale)) do
+          {:ok, path} -> {path, locale}
+          :error -> nil
+        end
+      end)
+    end
+  end
 
-    with :error <- get_parent_template_path(lang_name),
-         :error <- get_phoenix_kit_lang_template_path(lang_name) do
-      nil
-    else
-      {:ok, path} -> {path, locale}
+  # The host's own English template, if it has one.
+  defp host_english(template_name, _candidates, parent) do
+    case parent.(template_name) do
+      {:ok, path} -> {path, "en"}
+      :error -> nil
     end
   end
 
@@ -209,13 +234,6 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
     # "privacy_policy.eex" + "de" -> "privacy_policy.de.eex"
     base = Path.rootname(template_name)
     "#{base}.#{language}.eex"
-  end
-
-  defp get_base_template_path(template_name) do
-    case get_parent_template_path(template_name) do
-      {:ok, path} -> path
-      :error -> get_phoenix_kit_template_path(template_name)
-    end
   end
 
   defp get_phoenix_kit_lang_template_path(template_name) do
