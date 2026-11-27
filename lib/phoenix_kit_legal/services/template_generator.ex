@@ -137,13 +137,13 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   end
 
   defp fun_lookup(template_name, candidates) do
-    fn lookup ->
-      Enum.find_value(candidates, fn locale ->
-        case lookup.(localized_template_name(template_name, locale)) do
-          {:ok, path} -> {path, locale}
-          :error -> nil
-        end
-      end)
+    fn lookup -> Enum.find_value(candidates, &lookup_locale(lookup, template_name, &1)) end
+  end
+
+  defp lookup_locale(lookup, template_name, locale) do
+    case lookup.(localized_template_name(template_name, locale)) do
+      {:ok, path} -> {path, locale}
+      :error -> nil
     end
   end
 
