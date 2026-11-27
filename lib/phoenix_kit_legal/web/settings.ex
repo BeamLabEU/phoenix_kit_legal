@@ -5,7 +5,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   Route: {prefix}/admin/settings/legal
 
   Sections:
-  1. Module enable/disable (with optional Publishing dependency check)
+  1. Module enable/disable (with the Publishing dependency check)
   2. Compliance framework selection
   3. Company information form
   4. DPO contact form

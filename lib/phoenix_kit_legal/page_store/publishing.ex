@@ -2,14 +2,15 @@ defmodule PhoenixKit.Modules.Legal.PageStore.Publishing do
   @moduledoc """
   `PhoenixKit.Modules.Legal.PageStore` over `phoenix_kit_publishing`: every
   call goes straight to `PhoenixKit.Modules.Publishing`. Chosen
-  automatically when Publishing is installed, so hosts that have it behave
-  exactly as before Publishing became optional.
+  automatically when Publishing is loaded (it is a required dependency), so
+  hosts behave exactly as before the adapter existed.
   """
 
   @behaviour PhoenixKit.Modules.Legal.PageStore
 
-  # Publishing is an optional dependency: absent at compile time in a host
-  # without it, where this adapter is never selected.
+  # Publishing is a required dependency, but a host overriding deps may
+  # leave it out: then it is absent at compile time and this adapter is
+  # never selected.
   @compile {:no_warn_undefined, PhoenixKit.Modules.Publishing}
 
   alias PhoenixKit.Modules.Publishing
