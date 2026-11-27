@@ -175,6 +175,19 @@ defmodule PhoenixKit.Modules.Legal.RenderPageTest do
     end
   end
 
+  test "generated_page_templates/0 keys every page by language only" do
+    with_settings(fn ->
+      Repo.query!(
+        "INSERT INTO phoenix_kit_settings (key, value_json) VALUES ('legal_page_templates', $1)",
+        [%{"privacy-policy" => %{"_primary" => "en", "en" => %{"locale" => "en"}}}]
+      )
+
+      assert Legal.generated_page_templates() == %{
+               "privacy-policy" => %{"en" => %{"locale" => "en"}}
+             }
+    end)
+  end
+
   test "put_page_record/5 records the entry and the store's primary language" do
     current = %{"privacy-policy" => "junk", "cookie-policy" => %{"en" => %{}}}
     entry = %{"locale" => "en", "template_version" => "sha256:x"}

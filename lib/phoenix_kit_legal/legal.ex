@@ -1158,13 +1158,23 @@ defmodule PhoenixKit.Modules.Legal do
   What each generated page was last written from, per language:
   `%{"privacy-policy" => %{"et" => %{"locale" => "et", "template_version" =>
   "sha256:…", "generated_at" => "…"}}}`. `"locale"` differs from the
-  language key when the page fell back to English.
+  language key when the page fell back to English. Every inner key is a
+  language code; the store's primary language that the consent record also
+  keeps per page (`"_primary"`) is not part of this answer.
   """
   @spec generated_page_templates() :: map()
   def generated_page_templates do
     case Settings.get_json_setting(@page_templates_key, %{}) do
-      %{} = map -> Map.drop(map, ["items"])
-      _ -> %{}
+      %{} = map ->
+        map
+        |> Map.drop(["items"])
+        |> Map.new(fn
+          {slug, %{} = page} -> {slug, Map.delete(page, "_primary")}
+          other -> other
+        end)
+
+      _ ->
+        %{}
     end
   rescue
     _ -> %{}
