@@ -1564,6 +1564,18 @@ defmodule PhoenixKit.Modules.Legal do
     ]
   end
 
+  @doc false
+  # A generated page's title, in the language its body is actually in: a
+  # language with no template gets the English body, so an English title
+  # too (never a German title over English text).
+  @spec page_title(PageType.t(), String.t() | nil) :: String.t()
+  def page_title(page_config, language),
+    do:
+      translate_title(
+        page_config.title,
+        TemplateGenerator.resolved_locale(page_config.template, language)
+      )
+
   defp translate_title(title, language) do
     Gettext.with_locale(PhoenixKit.Modules.Legal.Gettext, language, fn ->
       Gettext.gettext(PhoenixKit.Modules.Legal.Gettext, title)
@@ -1606,7 +1618,8 @@ defmodule PhoenixKit.Modules.Legal do
     e -> {:error, e}
   end
 
-  defp get_page_config(page_type) do
+  @doc false
+  def get_page_config(page_type) do
     case Map.get(@page_types, page_type) do
       nil -> {:error, :unknown_page_type}
       map -> {:ok, PageType.from_map(map)}
@@ -1753,7 +1766,7 @@ defmodule PhoenixKit.Modules.Legal do
   end
 
   defp create_or_update_legal_post(page_config, content, language, scope) do
-    full_content = "# #{translate_title(page_config.title, language)}\n\n#{content}"
+    full_content = "# #{page_title(page_config, language)}\n\n#{content}"
 
     case publishing_module().read_post(@legal_blog_slug, page_config.slug) do
       {:ok, existing_post} ->
@@ -1841,7 +1854,7 @@ defmodule PhoenixKit.Modules.Legal do
     publishing_module().update_post(
       @legal_blog_slug,
       lang_post,
-      %{"content" => full_content, "title" => translate_title(page_config.title, language)},
+      %{"content" => full_content, "title" => page_title(page_config, language)},
       scope: scope
     )
   end
@@ -1851,7 +1864,7 @@ defmodule PhoenixKit.Modules.Legal do
   defp create_new_legal_post(page_config, full_content, language, scope) do
     with {:ok, post} <-
            publishing_module().create_post(@legal_blog_slug, %{
-             title: translate_title(page_config.title, language),
+             title: page_title(page_config, language),
              slug: page_config.slug,
              scope: scope
            }) do
@@ -1877,7 +1890,7 @@ defmodule PhoenixKit.Modules.Legal do
           lang_post,
           %{
             "content" => full_content,
-            "title" => translate_title(page_config.title, language),
+            "title" => page_title(page_config, language),
             "status" => "draft"
           },
           scope: scope

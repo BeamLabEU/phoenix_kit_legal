@@ -134,6 +134,12 @@ defmodule PhoenixKit.Modules.Legal.RenderPageTest do
     end)
   end
 
+  test "a generated page's title is in the language of its body" do
+    {:ok, config} = Legal.get_page_config("privacy-policy")
+    assert Legal.page_title(config, "de") == Legal.page_title(config, "en")
+    refute Legal.page_title(config, "et") == Legal.page_title(config, "en")
+  end
+
   test "clean_locale/1 keeps language codes only" do
     assert Legal.clean_locale("et") == "et"
     assert Legal.clean_locale(" zh_Hant ") == "zh_Hant"
