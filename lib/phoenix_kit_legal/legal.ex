@@ -1175,6 +1175,16 @@ defmodule PhoenixKit.Modules.Legal do
   @doc false
   @spec remember_template(PageType.t(), String.t(), map() | nil) :: :ok
   def remember_template(page_config, language, scope) do
+    remember_template(page_config, language, scope, &primary_store_language/0)
+  end
+
+  @doc false
+  # `primary` answers the page store's primary language at generation time
+  # (injectable for tests). It is kept per page as `"_primary"`: the store
+  # serves that language's page to a visitor whose language has none, and
+  # the consent record (`policy_record/1`) must name that page, read from
+  # the cache only.
+  def remember_template(page_config, language, scope, primary) do
     entry = %{
       "locale" => TemplateGenerator.resolved_locale(page_config.template, language),
       "template_version" => TemplateGenerator.template_version(page_config.template, language),
@@ -1187,27 +1197,49 @@ defmodule PhoenixKit.Modules.Legal do
         _ -> %{}
       end
 
-    page = current |> Map.get(page_config.slug, %{}) |> Map.put(language, entry)
-
     opts =
       case actor_uuid(scope) do
         uuid when is_binary(uuid) -> [actor_uuid: uuid]
         _ -> []
       end
 
-    put_setting(:json, @page_templates_key, Map.put(current, page_config.slug, page), opts)
+    put_setting(
+      :json,
+      @page_templates_key,
+      put_page_record(current, page_config.slug, language, entry, primary),
+      opts
+    )
+
     :ok
   rescue
     _ -> :ok
+  end
+
+  @doc false
+  # The recorded map with `entry` under `slug`/`language` and the store's
+  # primary language under `slug`/`"_primary"` (when `primary` answers one).
+  @spec put_page_record(map(), String.t(), String.t(), map(), (-> String.t() | nil)) :: map()
+  def put_page_record(current, slug, language, entry, primary) do
+    page =
+      case Map.get(current, slug) do
+        %{} = page -> page
+        _ -> %{}
+      end
+      |> Map.put(language, entry)
+      |> put_primary_language(primary)
+
+    Map.put(current, slug, page)
   end
 
   @doc """
   What a visitor deciding in `language` is shown, for the consent record:
   `%{"locale" => requested, "policy_locale" => locale of the policy text,
   "template_versions" => %{slug => version}}` for the pages the selected
-  frameworks require. A generated page's recorded template
-  (`generated_page_templates/0`) wins over the bundled template, since that
-  is the text visitors read. `"policy_locale"` is `"en"` when the language
+  frameworks require: the page actually served, as recorded at generation
+  (`generated_page_templates/0`) — the page in the visitor's language or its
+  base language, else, while a page store serves pages, the page in the
+  store's primary language (what the store shows instead) — and the bundled
+  template only when no page was generated. `"policy_locale"` is `"en"` when the language
   fell back to English. `language` that is not a language code reads as
   `nil` (then `"en"`).
   """
@@ -1267,6 +1299,19 @@ defmodule PhoenixKit.Modules.Legal do
     end
   end
 
+  defp put_primary_language(page, primary) do
+    case primary.() do
+      lang when is_binary(lang) and lang != "" -> Map.put(page, "_primary", lang)
+      _ -> page
+    end
+  rescue
+    _ -> page
+  end
+
+  defp primary_store_language do
+    if PageStore.available?(), do: publishing_module().get_primary_language()
+  end
+
   defp page_template_version(config, language, recorded) do
     case recorded_page(config, language, recorded) do
       %{"template_version" => version} when is_binary(version) -> version
@@ -1285,9 +1330,12 @@ defmodule PhoenixKit.Modules.Legal do
     end
   end
 
-  # The generated page's record for `language`, or for its base language
-  # (`et-EE` → the page generated as `et`), the same order the templates
-  # resolve in.
+  # The page a visitor in `language` is actually served, as recorded when it
+  # was generated: the page generated for `language`, or for its base
+  # language (`et-EE` → `et`); failing both, while a page store serves
+  # generated pages, the page generated in the store's primary language
+  # (`"_primary"`), which is what the store shows instead. `nil` when none
+  # was generated (the caller then names the bundled template).
   defp recorded_page(config, language, recorded) do
     lang = language || "en"
     base = lang |> String.split(["-", "_"]) |> hd() |> String.downcase()
@@ -1298,7 +1346,13 @@ defmodule PhoenixKit.Modules.Legal do
         _ -> %{}
       end
 
-    Enum.find_value(Enum.uniq([lang, base]), fn key ->
+    primary =
+      case Map.get(pages, "_primary") do
+        primary when is_binary(primary) -> if PageStore.available?(), do: [primary], else: []
+        _ -> []
+      end
+
+    Enum.find_value(Enum.uniq([lang, base] ++ primary), fn key ->
       case Map.get(pages, key) do
         %{} = entry -> entry
         _ -> nil
