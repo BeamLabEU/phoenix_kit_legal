@@ -68,9 +68,13 @@ defmodule PhoenixKitLegal.MixProject do
       {:rustler, ">= 0.0.0", optional: true},
 
       # Publishing stores generated legal pages as posts and serves them.
-      # Optional: without it the consent widget/log and `Legal.render_page/2`
-      # work and page storage is off (`PhoenixKit.Modules.Legal.PageStore`).
-      {:phoenix_kit_publishing, "~> 0.15", optional: true},
+      # Required, so a host that lists only phoenix_kit_legal keeps it (an
+      # optional dep would silently drop Publishing, and the host's /legal
+      # pages with it). The code itself goes through
+      # `PhoenixKit.Modules.Legal.PageStore`, so it already runs without
+      # Publishing loaded (a host overriding deps, or a `:page_store`); making
+      # the dep optional later is this one line plus an upgrade note.
+      {:phoenix_kit_publishing, "~> 0.15"},
 
       # LiveView for admin settings page.
       {:phoenix_live_view, "~> 1.0"},

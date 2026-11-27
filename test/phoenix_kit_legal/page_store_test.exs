@@ -74,10 +74,14 @@ defmodule PhoenixKit.Modules.Legal.PageStoreTest do
     assert Legal.list_generated_pages() == []
   end
 
-  test "mix.exs declares Publishing optional" do
+  # Optional would drop Publishing (and its /legal pages) from every host
+  # that lists only phoenix_kit_legal.
+  test "mix.exs keeps Publishing a required dependency" do
     deps = Mix.Project.config()[:deps]
 
-    assert {:phoenix_kit_publishing, _req, opts} = List.keyfind(deps, :phoenix_kit_publishing, 0)
-    assert opts[:optional] == true
+    case List.keyfind(deps, :phoenix_kit_publishing, 0) do
+      {:phoenix_kit_publishing, _req} -> :ok
+      {:phoenix_kit_publishing, _req, opts} -> refute opts[:optional]
+    end
   end
 end

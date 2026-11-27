@@ -1,7 +1,13 @@
 defmodule PhoenixKit.Modules.Legal.PageStore do
   @moduledoc """
   Where generated legal pages are stored and served from, behind one
-  interface so `phoenix_kit_publishing` is an **optional** dependency.
+  interface. `phoenix_kit_publishing` stays a **required** dependency in
+  `mix.exs` (optional would silently drop it, and the `/legal` pages, from
+  every host that lists only this package), but nothing outside the
+  Publishing adapter calls it: a host that leaves Publishing out (a deps
+  override) or sets its own store still works. Making the dependency
+  optional later is the `mix.exs` line plus an upgrade note telling hosts
+  that want Publishing to list it themselves.
 
   `adapter/0` picks, in order:
 

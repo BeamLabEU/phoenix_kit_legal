@@ -7,7 +7,7 @@ defmodule PhoenixKit.Modules.Legal do
   - Company information management
   - Legal page generation (Privacy Policy, Terms, Cookie Policy)
   - Page storage through `PhoenixKit.Modules.Legal.PageStore`: Publishing
-    (`phoenix_kit_publishing`, an optional dependency) when installed, a
+    (`phoenix_kit_publishing`, a required dependency) when loaded, a
     host-configured store, or none (then `render_page/2` hands the host the
     rendered Markdown to serve itself)
 
@@ -17,9 +17,11 @@ defmodule PhoenixKit.Modules.Legal do
   - Google Consent Mode v2 integration
 
   ## Dependencies
-  - Publishing (`phoenix_kit_publishing`) is optional. When it is installed it
-    must be enabled before this module can be; without it the consent
-    widget, consent log and `render_page/2` work and page storage is off.
+  - Publishing (`phoenix_kit_publishing`) is a required dependency and must
+    be enabled before this module can be. The code reaches it only through
+    `PageStore`, so a host that overrides deps to leave it out, or configures
+    its own `:page_store`, still gets the consent widget, the consent log and
+    `render_page/2` (page storage then off or the host's).
 
   ## Usage
 

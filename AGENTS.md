@@ -12,9 +12,12 @@ Consent Mode v2, and logs consent decisions to an audit trail. It implements the
 Legal generates content; Publishing renders it.
 
 - **Depends on:** `phoenix_kit` `>= 3.5.0 and < 4.0.0` (Hex), `phoenix_kit_publishing` `~> 0.15`
-  (**optional** — legal pages are Publishing posts and Publishing serves them
-  publicly when it is installed; every call goes through the
-  `Legal.PageStore` adapter, see Conventions). Also `phoenix_live_view ~> 1.0`,
+  (**required** in `mix.exs` — legal pages are Publishing posts and Publishing
+  serves them publicly. Every call goes through the `Legal.PageStore`
+  adapter, see Conventions, so the code runs without Publishing loaded; the
+  dependency is kept required because an optional one would silently drop
+  Publishing, and its `/legal` pages, from hosts that list only this package.
+  Making it optional later = the `mix.exs` line + an upgrade note). Also `phoenix_live_view ~> 1.0`,
   `ecto_sql ~> 3.10`, `gettext ~> 1.0`.
 - **Consumed by:** any module that collects data server-side may ask
   `Legal.Consent.status/2` (behind `Code.ensure_loaded?/1` — `phoenix_kit_web_analytics`
@@ -281,7 +284,7 @@ lib/
     ├── legal.ex                          # PhoenixKit.Module facade
     ├── consent.ex                        # the server's copy of a decision: cookie + log
     ├── data_collection.ex                # what modules declare they collect
-    ├── page_store.ex (+ page_store/)     # optional Publishing behind an adapter (Publishing / None)
+    ├── page_store.ex (+ page_store/)     # Publishing behind an adapter (Publishing / host store / None)
     ├── routes.ex                         # route module: the consent endpoint
     ├── legal_framework.ex                # LegalFramework struct
     ├── page_type.ex                      # PageType struct
