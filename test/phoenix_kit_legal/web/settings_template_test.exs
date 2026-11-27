@@ -80,4 +80,14 @@ defmodule PhoenixKit.Modules.Legal.Web.SettingsTemplateTest do
     refute source =~ ~s[gettext("Ask again after")]
     refute source =~ ~s[gettext("days")]
   end
+
+  # Without Publishing the page says page storage is off; with Publishing
+  # installed but disabled it keeps the old warning. Read as source, as above.
+  test "the Publishing notices follow @publishing_installed", %{source: source} do
+    assert source =~ ~r/if not @publishing_installed do %>\s*<div id="legal-no-page-store"/
+    assert source =~ "if @publishing_installed and not @publishing_enabled do"
+
+    live = File.read!(Path.expand("../../../lib/phoenix_kit_legal/web/settings.ex", __DIR__))
+    assert live =~ "assign(:publishing_installed, config.publishing_installed)"
+  end
 end

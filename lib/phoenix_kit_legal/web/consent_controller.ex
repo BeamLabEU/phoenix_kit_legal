@@ -89,7 +89,8 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentController do
   # The language the visitor saw: the page's `<html lang>` the banner sends,
   # else the first `Accept-Language` tag. Only a well-formed language code
   # is kept (`Legal.clean_locale/1`); anything else records nil.
-  defp request_locale(conn, params) do
+  @doc false
+  def request_locale(conn, params) do
     Legal.clean_locale(params["locale"]) ||
       case get_req_header(conn, "accept-language") do
         [header | _] -> header |> String.split([",", ";"]) |> hd() |> Legal.clean_locale()
