@@ -495,7 +495,10 @@
             marketing: !!consent.marketing,
             preferences: !!consent.preferences
           },
-          source: source
+          source: source,
+          // The language the banner and policies were shown in; the server
+          // records it with the decision (and which policy text it was).
+          locale: consent.locale || null
         })
       }).then(function(response) {
         if (!response.ok) log("Consent endpoint returned " + response.status);
@@ -521,9 +524,10 @@
     return queueWrite(function() {
       return fetch(endpoint, {
         method: "DELETE",
+        body: JSON.stringify({locale: (document.documentElement && document.documentElement.lang) || null}),
         credentials: "same-origin",
         keepalive: true,
-        headers: { "accept": "application/json" }
+        headers: { "accept": "application/json", "content-type": "application/json" }
       }).then(function(response) {
         return response.ok || response.status === 404;
       }).catch(function(err) {
@@ -591,6 +595,7 @@
     var reload = PhoenixKitConsent.config.reloadOnWithdrawal && withdrew(before, consent);
 
     PhoenixKitConsent.consent = consent;
+    consent.locale = (document.documentElement && document.documentElement.lang) || null;
     consent.pending = true;
     saveConsent(consent);
     // A new decision replaces a revocation still waiting to be delivered.

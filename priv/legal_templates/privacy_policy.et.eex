@@ -1,0 +1,173 @@
+<%!-- Privacy Policy Template --%>
+<%!-- Variables: company_name, company_address, company_country, company_website, dpo_name, dpo_email, frameworks, effective_date --%>
+
+> **DOKUMENDI MUSTAND - VAJALIK ÕIGUSLIK ÜLEVAATUS**
+>
+> See dokument on loodud automaatselt teie valitud vastavusraamistike põhjal.
+> See on põhimall, mis vastab miinimumnõuetele, kuid kvalifitseeritud õigusspetsialist
+> PEAB selle enne avaldamist üle vaatama ja kohandama.
+>
+> Viimati loodud: <%= @effective_date %>
+
+---
+
+**Jõustumise kuupäev:** <%= @effective_date %>
+
+## 1. Sissejuhatus
+
+<%= @company_name %> („meie“ või „meid“) on pühendunud teie privaatsuse kaitsmisele. Käesolevas privaatsuspoliitikas selgitatakse, kuidas me kogume, kasutame, avaldame ja kaitseme teie andmeid, kui külastate meie veebisaiti<%= if @company_website != "", do: " aadressil #{@company_website}", else: "" %> või kasutate meie teenuseid.
+
+## 2. Ettevõtte andmed
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %>
+<%= @company_address %>
+<% end %>
+<%= if @company_country != "" do %>
+<%= @company_country %>
+<% end %>
+<%= if @registration_number != "" do %>
+Registrikood: <%= @registration_number %>
+<% end %>
+<%= if @vat_number != "" do %>
+KMKR number: <%= @vat_number %>
+<% end %>
+
+<%= if @dpo_name != "" or @dpo_email != "" do %>
+## 3. Andmekaitseametnik
+
+Andmekaitsega seotud päringute korral võtke palun ühendust meie andmekaitseametnikuga:
+
+<%= if @dpo_name != "" do %>- **Nimi:** <%= @dpo_name %><% end %>
+<%= if @dpo_email != "" do %>- **E-post:** <%= @dpo_email %><% end %>
+<%= if @dpo_phone != "" do %>- **Telefon:** <%= @dpo_phone %><% end %>
+<%= if @dpo_address != "" do %>- **Aadress:** <%= @dpo_address %><% end %>
+<% end %>
+
+## 4. Andmed, mida me kogume
+
+### 4.1 Teie esitatud andmed
+
+Võime koguda isikuandmeid, mille te meile vabatahtlikult esitate, kui te:
+- registreerite konto
+- tellite meie uudiskirja
+- pöördute meie poole päringuga
+- sooritate ostu
+- osalete küsitlustes või kampaaniates
+
+Need andmed võivad hõlmata:
+- nime ja kontaktandmeid (e-post, telefoninumber)
+- konto sisselogimisandmeid
+- arveldus- ja makseandmeid
+- suhtluseelistusi
+- muid andmeid, mille otsustate esitada
+
+### 4.2 Automaatselt kogutavad andmed
+
+Kui kasutate meie teenuseid, kogume automaatselt teatud andmeid, sealhulgas:
+- IP-aadress
+- brauseri tüüp ja versioon
+- operatsioonisüsteem
+- seadme andmed
+- juurdepääsu kellaajad ja kuupäevad
+- vaadatud lehed ja klõpsatud lingid
+- viitav URL
+
+### 4.3 Küpsised ja jälgimistehnoloogiad
+
+Kasutame küpsiseid ja muid sarnaseid jälgimistehnoloogiaid, et koguda andmeid teie sirvimistegevuse kohta. Lisateavet leiate meie küpsiste kasutamise põhimõtetest.
+
+## 5. Kuidas me teie andmeid kasutame
+
+Kasutame kogutud andmeid selleks, et:
+- osutada, hooldada ja täiustada oma teenuseid
+- töödelda tehinguid ja saata nendega seotud teavet
+- saata reklaamisõnumeid (teie nõusolekul)
+- vastata teie kommentaaridele, küsimustele ja taotlustele
+- jälgida ja analüüsida suundumusi, kasutust ja tegevusi
+- avastada, uurida ja ennetada turvaintsidente
+- täita õiguslikke kohustusi
+
+<%= if "gdpr" in @frameworks or "uk_gdpr" in @frameworks do %>
+## 6. Töötlemise õiguslik alus (GDPR)
+
+Isikuandmete kaitse üldmääruse (GDPR) kohaselt töötleme teie isikuandmeid järgmistel õiguslikel alustel:
+
+- **Nõusolek (artikli 6 lõike 1 punkt a):** kui olete andnud konkreetseteks eesmärkideks selgesõnalise nõusoleku
+- **Lepingu täitmine (artikli 6 lõike 1 punkt b):** kui töötlemine on vajalik meie lepinguliste kohustuste täitmiseks
+- **Juriidiline kohustus (artikli 6 lõike 1 punkt c):** kui peame täitma õigusnõudeid
+- **Õigustatud huvid (artikli 6 lõike 1 punkt f):** kui meil on õigustatud ärihuvid, mis ei kaalu üles teie õigusi
+<% end %>
+
+## 7. Andmete jagamine ja avaldamine
+
+Võime jagada teie andmeid:
+- **Teenuseosutajatega:** kolmandad isikud, kes osutavad teenuseid meie nimel
+- **Äripartneritega:** teie nõusolekul ühiste turundustegevuste jaoks
+- **Ametiasutustega:** kui seadus seda nõuab või meie õiguste kaitseks
+- **Äriülekannete korral:** seoses ühinemiste, omandamiste või varade müügiga
+
+Me ei müü teie isikuandmeid kolmandatele isikutele.
+
+<%= if "gdpr" in @frameworks or "uk_gdpr" in @frameworks or "lgpd" in @frameworks or "pipeda" in @frameworks do %>
+## 8. Teie õigused
+
+Teil on oma isikuandmetega seoses järgmised õigused:
+
+<%= if "gdpr" in @frameworks or "uk_gdpr" in @frameworks do %>
+### GDPR-ist tulenevad õigused (EL-i/EMP/Ühendkuningriigi elanikud)
+
+- **Õigus tutvuda andmetega:** taotleda oma isikuandmete koopiat
+- **Õigus andmete parandamisele:** taotleda ebatäpsete andmete parandamist
+- **Õigus andmete kustutamisele:** taotleda oma andmete kustutamist („õigus olla unustatud“)
+- **Õigus töötlemise piiramisele:** taotleda, et piiraksime teie andmete kasutamist
+- **Õigus andmete ülekandmisele:** saada oma andmed struktureeritud, masinloetavas vormingus
+- **Õigus esitada vastuväiteid:** esitada vastuväiteid õigustatud huvidel põhinevale töötlemisele
+- **Automatiseeritud otsuste tegemisega seotud õigused:** õigus, et teie kohta ei tehtaks otsust, mis põhineb üksnes automatiseeritud töötlemisel
+
+Nende õiguste kasutamiseks võtke ühendust meie andmekaitseametnikuga aadressil <%= @dpo_email %>.
+<% end %>
+<% end %>
+
+<%= if "ccpa" in @frameworks or "us_states" in @frameworks do %>
+### CCPA/CPRA-st tulenevad õigused (California elanikud)
+
+California tarbijate privaatsuse seaduse ja California privaatsusõiguste seaduse kohaselt on teil õigus:
+
+- **Teada:** taotleda teavet isikuandmete kohta, mida me kogume, kasutame ja avaldame
+- **Kustutada:** taotleda oma isikuandmete kustutamist
+- **Parandada:** taotleda ebatäpsete isikuandmete parandamist
+- **Keelduda:** keelduda oma isikuandmete müümisest või jagamisest
+- **Piirata kasutamist:** piirata delikaatsete isikuandmete kasutamist ja avaldamist
+- **Mittediskrimineerimisele:** et teid ei koheldaks oma õiguste kasutamise eest diskrimineerivalt
+
+Nende õiguste kasutamiseks külastage palun meie lehte „Ära müü minu isikuandmeid“ või võtke meiega ühendust.
+<% end %>
+
+## 9. Andmete turvalisus
+
+Rakendame asjakohaseid tehnilisi ja korralduslikke meetmeid, et kaitsta teie isikuandmeid volitamata juurdepääsu, muutmise, avaldamise või hävitamise eest. Ükski internetis edastamise ega elektroonilise säilitamise viis ei ole siiski 100% turvaline.
+
+## 10. Andmete säilitamine
+
+Säilitame teie isikuandmeid ainult seni, kuni see on vajalik nende kogumise eesmärkide täitmiseks, õiguslike kohustuste täitmiseks, vaidluste lahendamiseks ja meie lepingute täitmise tagamiseks.
+
+## 11. Andmete rahvusvaheline edastamine
+
+Teie andmeid võidakse edastada ja töödelda muudes riikides kui teie elukohariik. Tagame asjakohased kaitsemeetmed teie andmete kaitsmiseks kooskõlas käesoleva privaatsuspoliitikaga.
+
+## 12. Laste privaatsus
+
+Meie teenused ei ole mõeldud alla 16-aastastele lastele. Me ei kogu teadlikult isikuandmeid alla 16-aastastelt lastelt.
+
+## 13. Poliitika muudatused
+
+Võime käesolevat privaatsuspoliitikat aeg-ajalt ajakohastada. Teavitame teid kõigist muudatustest, avaldades uue privaatsuspoliitika sellel lehel ja uuendades dokumendi alguses olevat „Jõustumise kuupäeva“.
+
+## 14. Võtke meiega ühendust
+
+Kui teil on küsimusi käesoleva privaatsuspoliitika või meie privaatsustavade kohta, võtke meiega palun ühendust:
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @dpo_email != "" do %>E-post: <%= @dpo_email %><% end %>

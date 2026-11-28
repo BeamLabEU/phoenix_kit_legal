@@ -19,7 +19,17 @@
 
     <div class="space-y-6">
       <%!-- Publishing Dependency Warning --%>
-      <%= if not @publishing_enabled do %>
+      <%= if not @publishing_installed do %>
+        <div id="legal-no-page-store" class="alert alert-info">
+          <span>
+            {gettext(
+              "The Publishing module is not installed, so legal pages are not stored or served. The cookie consent banner and the consent log work without it."
+            )}
+          </span>
+        </div>
+      <% end %>
+
+      <%= if @publishing_installed and not @publishing_enabled do %>
         <div class="alert alert-warning">
           <svg
             xmlns="http://www.w3.org/2000/svg"

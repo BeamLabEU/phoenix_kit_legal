@@ -342,6 +342,11 @@ defmodule PhoenixKit.Modules.Legal.Consent do
     * `:source` — one of `sources/0` (default `"banner"`)
     * `:user_uuid` — the signed-in user, if any
     * `:version` — the policy version (default: the current one)
+    * `:locale` — the language the visitor saw the banner and policies in.
+      When given, the log entry's metadata also records `"locale"`,
+      `"policy_locale"` (the language of the policy text; `"en"` when it
+      fell back to English) and `"template_versions"` (page slug →
+      template fingerprint), see `Legal.policy_record/1`
 
   A decision equal to the one the request's cookie already holds changes
   nothing and is not logged again — with one exception. A decision made
@@ -490,8 +495,17 @@ defmodule PhoenixKit.Modules.Legal.Consent do
       consent_version: consent.version,
       ip_address: if(log_ip?(), do: IpAddress.client_address(conn)),
       user_agent_hash: if(log_user_agent?(), do: user_agent_hash(conn)),
-      metadata: %{"source" => consent.source, "gpc" => objected?(conn)}
+      metadata:
+        Map.merge(policy_metadata(opts), %{"source" => consent.source, "gpc" => objected?(conn)})
     ]
+  end
+
+  # Which text the decision was made under: the visitor's language, the
+  # language the policy is actually in (English after a fallback) and the
+  # template version of each required page (`Legal.policy_record/1`). Only
+  # when the caller says which language the visitor saw (`:locale`).
+  defp policy_metadata(opts) do
+    if Keyword.has_key?(opts, :locale), do: Legal.policy_record(opts[:locale]), else: %{}
   end
 
   defp user_agent_hash(conn) do

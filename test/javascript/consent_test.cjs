@@ -46,6 +46,7 @@ function fixture(stored = null, pending = false) {
     localStorage: storage(data), sessionStorage: storage(new Map()),
     document: {
       readyState: 'complete', getElementById: id => elements.get(id),
+      documentElement: { lang: 'et' },
       querySelectorAll: () => [], addEventListener: on
     },
     addEventListener: on, dispatchEvent: event => events.push(event),
@@ -92,6 +93,13 @@ test('a pending reconciliation cannot re-post grants after revocation', async ()
   assert.equal(f.requests.filter(r => r.method === 'POST').length, 0);
 });
 
+test('a decision reports the page language', async () => {
+  const f = fixture();
+  f.consent.acceptAll();
+  await settle();
+  assert.equal(JSON.parse(f.requests[0].body).locale, 'et');
+});
+
 test('rapid decisions reach the server in order', async () => {
   const f = fixture();
   f.consent.acceptAll();
@@ -136,6 +144,7 @@ test('clock skew cannot overwrite an undelivered refusal with server grants', as
   const refused = decision(false);
   refused.timestamp = new Date(Date.now() - 3600000).toISOString();
   refused.pending = true;
+  refused.locale = 'ru';
   const f = fixture(refused);
   f.requests[0].resolve(response({decided: true, version: '1.0',
     decided_at: Math.floor(Date.now() / 1000), consent: {analytics: true}}));
@@ -143,6 +152,7 @@ test('clock skew cannot overwrite an undelivered refusal with server grants', as
   assert.equal(f.consent.getConsent().analytics, false);
   assert.equal(f.requests[1].method, 'POST');
   assert.equal(JSON.parse(f.requests[1].body).consent.analytics, false);
+  assert.equal(JSON.parse(f.requests[1].body).locale, 'ru');
   f.requests[1].resolve(response({}));
   await settle();
   assert.equal(JSON.parse(f.data.get('pk_consent')).pending, undefined);
@@ -154,6 +164,7 @@ test('blocked storage cannot prevent server withdrawal', async () => {
   f.consent.revokeConsent();
   await settle();
   assert.equal(f.requests.filter(r => r.method === 'DELETE').length, 1);
+  assert.equal(JSON.parse(f.requests.find(r => r.method === 'DELETE').body).locale, 'et');
   assert.equal(f.consent.getConsent(), null);
 });
 

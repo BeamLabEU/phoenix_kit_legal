@@ -1,0 +1,163 @@
+<%!-- Acceptable Use Policy Template --%>
+<%!-- Variables: company_name, company_address, company_country, company_website, dpo_name, dpo_email, frameworks, effective_date --%>
+
+> **DOKUMENDI MUSTAND - VAJALIK ÕIGUSLIK ÜLEVAATUS**
+>
+> See dokument on loodud automaatselt teie valitud vastavusraamistike põhjal.
+> See on põhimall, mis vastab miinimumnõuetele, kuid kvalifitseeritud õigusspetsialist
+> PEAB selle enne avaldamist üle vaatama ja kohandama.
+>
+> Viimati loodud: <%= @effective_date %>
+
+---
+
+**Jõustumise kuupäev:** <%= @effective_date %>
+
+## 1. Sissejuhatus
+
+Käesolev vastuvõetava kasutamise põhimõte („Põhimõte“) reguleerib selliste teenuste, veebisaitide ja rakenduste (edaspidi koos „Teenused“) kasutamist, mida pakub <%= @company_name %> („meie“ või „meid“)<%= if @company_website != "", do: " aadressil #{@company_website}", else: "" %>.
+
+Teenustele juurde pääsedes või neid kasutades nõustute järgima käesolevat Põhimõtet. Kui te ei nõustu, ei tohi te meie Teenuseid kasutada.
+
+## 2. Kohaldamisala
+
+Käesolevat Põhimõtet kohaldatakse kõigile meie Teenuste kasutajatele, sealhulgas:
+- registreeritud konto omanikele
+- meie veebisaitide külastajatele
+- API kasutajatele ja arendajatele
+- igale isikule või üksusele, kes meie Teenustele juurde pääseb
+
+## 3. Vastuvõetav kasutamine
+
+Nõustute kasutama meie Teenuseid üksnes seaduslikel eesmärkidel ja kooskõlas käesoleva Põhimõttega. Te võite:
+
+- kasutada Teenuseid nende ettenähtud otstarbel
+- luua ja hallata õiguspäraseid kasutajakontosid
+- jagada sisu, mille levitamiseks teil on õigus
+- suhelda teiste kasutajate ja meie meeskonnaga lugupidavalt
+- teatada rikkumistest või turvanõrkustest vastutustundlikult
+
+## 4. Keelatud tegevused
+
+Te EI TOHI kasutada meie Teenuseid selleks, et:
+
+### 4.1 Ebaseaduslikud tegevused
+- rikkuda kohaldatavaid seadusi, määrusi või kolmandate isikute õigusi
+- osaleda pettuses, rahapesus või terrorismi rahastamises
+- levitada ebaseaduslikku sisu või materjale
+- hõlbustada või edendada ebaseaduslikke tegevusi
+
+### 4.2 Kahjulik sisu
+- üles laadida, edastada või levitada pahavara, viiruseid või pahatahtlikku koodi
+- levitada rämpsposti, õngitsuskatseid või eksitavat sisu
+- postitada laimavat, sündsusetut või ähvardavat sisu
+- jagada sisu, mis kasutab ära alaealisi või kahjustab neid
+- levitada vaenukõnet või diskrimineerimist propageerivat sisu
+
+### 4.3 Turvarikkumised
+- püüda saada volitamata juurdepääsu süsteemidele või kontodele
+- segada või häirida Teenuste või võrkude toimimist
+- mööda hiilida turvameetmetest või juurdepääsukontrollist
+- korraldada teenusetõkestusründeid või muid sarnaseid tegevusi
+- koguda kasutajaandmeid (sh veebikraapimise teel) ilma loata
+
+### 4.4 Intellektuaalomandi rikkumised
+- rikkuda autoriõigusi, kaubamärke või muid intellektuaalomandi õigusi
+- eemaldada või muuta omandiõigust käsitlevaid teateid või märgiseid
+- kasutada Teenuseid piraatluseks või loata sisu levitamiseks
+
+### 4.5 Kuritarvitav käitumine
+- ahistada, ähvardada või hirmutada teisi kasutajaid
+- esineda kellegi teisena või anda oma isiku kohta valeteavet
+- jälitada teisi kasutajaid või tungida nende privaatsusesse
+- tegeleda kiusamise või sihipäraste rünnakutega
+
+### 4.6 Süsteemi kuritarvitamine
+- luua mitu kontot piirangutest kõrvalehoidmiseks
+- kasutada automatiseeritud tööriistu ilma loata
+- koormata süsteeme ülemäärase hulga päringutega
+- kasutada ära vigu või turvanõrkusi (välja arvatud vastutustundliku avalikustamise raames)
+
+## 5. Sisustandardid
+
+Meie Teenuste kaudu sisu luues või jagades peate tagama, et see:
+
+- on täpne ega ole eksitav
+- ei riku kolmandate isikute õigusi
+- vastab kohaldatavatele õigusaktidele
+- sobib sihtrühmale
+- ei sisalda teiste isikute isikuandmeid ilma nende nõusolekuta
+
+## 6. Kontoga seotud kohustused
+
+Kui teil on meie juures konto, vastutate te:
+
+- oma sisselogimisandmete turvalisuse tagamise eest
+- kõigi oma kontol toimuvate tegevuste eest
+- igast volitamata juurdepääsust viivitamata teatamise eest
+- oma kontoandmete täpsena ja ajakohasena hoidmise eest
+- vanusepiirangute järgimise eest
+
+## 7. Järelevalve ja täitmise tagamine
+
+Jätame endale õiguse:
+
+- jälgida Teenuste kasutamist Põhimõtte järgimise kontrollimiseks
+- uurida võimalikke rikkumisi
+- eemaldada rikkuv sisu või piirata juurdepääsu sellele
+- peatada või lõpetada kontod Põhimõtte rikkumise korral
+- teatada ebaseaduslikest tegevustest õiguskaitseasutustele
+- võtta rikkujate suhtes õiguslikke meetmeid
+
+## 8. Rikkumistest teatamine
+
+Kui saate teada käesoleva Põhimõtte rikkumisest, teatage sellest palun:
+
+<%= if @dpo_email != "" do %>**E-post:** <%= @dpo_email %><% end %>
+<%= if @company_address != "" do %>**Postiaadress:** <%= @company_address %><% end %>
+
+Suhtume kõikidesse teadetesse tõsiselt ja uurime neid viivitamata.
+
+## 9. Rikkumiste tagajärjed
+
+Käesoleva Põhimõtte rikkumine võib kaasa tuua:
+
+- hoiatuse või teate rikkumise kohta
+- juurdepääsu ajutise peatamise
+- konto alalise sulgemise
+- sisu eemaldamise
+- õiguslikud meetmed
+- teatamise õiguskaitseasutustele
+
+Tagajärje raskusaste sõltub rikkumise olemusest ja sagedusest.
+
+## 10. Õigustest loobumise välistamine
+
+Kui me ei nõua käesoleva Põhimõtte mõne sätte täitmist, ei tähenda see, et loobuksime õigusest nõuda selle täitmist tulevikus.
+
+## 11. Põhimõtte muudatused
+
+Võime käesolevat Põhimõtet aeg-ajalt ajakohastada. Olulistest muudatustest teavitame teid järgmiselt:
+- avaldame ajakohastatud Põhimõtte oma veebisaidil
+- saadame teate registreeritud kasutajatele
+- uuendame dokumendi alguses olevat „Jõustumise kuupäeva“
+
+Kui jätkate Teenuste kasutamist pärast muudatuste jõustumist, loetakse, et olete ajakohastatud Põhimõttega nõustunud.
+
+## 12. Seos teiste põhimõtetega
+
+Käesolev Põhimõte täiendab meie:
+- kasutustingimusi
+- privaatsuspoliitikat
+- küpsiste kasutamise põhimõtteid
+
+Vastuolu korral lähtutakse kasutustingimustest.
+
+## 13. Kontaktandmed
+
+Käesoleva vastuvõetava kasutamise põhimõtte kohta küsimuste korral võtke palun ühendust:
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @dpo_email != "" do %>E-post: <%= @dpo_email %><% end %>
+<%= if @company_website != "" do %>Veebisait: <%= @company_website %><% end %>

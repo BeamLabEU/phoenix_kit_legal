@@ -1,0 +1,167 @@
+<%!-- Cookie Policy Template --%>
+<%!-- Variables: company_name, company_address, company_website, dpo_email, frameworks, effective_date, data_collection --%>
+
+> **DOKUMENDI MUSTAND - VAJALIK ÕIGUSLIK ÜLEVAATUS**
+>
+> See dokument on loodud automaatselt teie valitud vastavusraamistike põhjal.
+> See on põhimall, mis vastab miinimumnõuetele, kuid kvalifitseeritud õigusspetsialist
+> PEAB selle enne avaldamist üle vaatama ja kohandama.
+>
+> Viimati loodud: <%= @effective_date %>
+
+---
+
+**Jõustumise kuupäev:** <%= @effective_date %>
+
+## 1. Mis on küpsised
+
+Küpsised on väikesed tekstifailid, mis salvestatakse teie seadmesse (arvutisse, tahvelarvutisse või mobiilseadmesse), kui külastate veebisaiti. Neid kasutatakse laialdaselt selleks, et veebisaidid töötaksid tõhusamalt, ning veebisaitide omanikele teabe andmiseks.
+
+## 2. Ettevõtte andmed
+
+**<%= @company_name %>**
+<%= if @company_address != "" do %><%= @company_address %><% end %>
+<%= if @company_website != "" do %>Veebisait: <%= @company_website %><% end %>
+
+## 3. Meie kasutatavate küpsiste liigid
+
+### 3.1 Rangelt vajalikud küpsised
+
+Need küpsised on veebisaidi nõuetekohaseks toimimiseks hädavajalikud. Need võimaldavad põhifunktsioone, nagu turvalisus, võrgu haldamine ja juurdepääs kontole. Nendest küpsistest ei saa keelduda.
+
+| Küpsise nimi | Eesmärk | Kestus |
+|-------------|---------|----------|
+| Saidi seansiküpsis | Hoiab teid sisselogituna ja kaitseb vorme võltsimise eest | Seanss |
+| Sisselogimise meeldejätmise küpsis | Hoiab teid sisselogituna, kui palute end meeles pidada | Määrab sait |
+<%= for entry <- @data_collection["necessary"], item <- entry.storage do %>| <%= item.name %> (<%= item.kind %>) | <%= item.purpose %> | <%= item.duration %> |
+<% end %>
+### 3.2 Toimivus/analüütika
+
+Need aitavad meil mõista, kuidas külastajad meie veebisaiti kasutavad.
+
+<%= if @data_collection["analytics"] == [] do %>
+Me ei kasuta praegu selle kategooria küpsiseid ega muid sarnaseid tehnoloogiaid.
+
+> **Mustandi märkus:** ükski selle saidi osa ei ole end selles kategoorias deklareerinud. Kui
+> laadite siin kolmandate isikute tööriistu (analüütika- või reklaamiskripti, manustatud
+> video), loetlege enne avaldamist, mida need salvestavad.
+<% else %>
+<%= if Enum.all?(@data_collection["analytics"], &(&1.storage == [])) do %>
+Selles kategoorias ei salvestata teie seadmesse midagi. See, mida me selle kategooria all kogume, on loetletud punktis 3.5 ja seda töödeldakse meie serverites.
+<% else %>
+| Nimi | Liik | Eesmärk | Kestus |
+|------|------|---------|----------|
+<%= for entry <- @data_collection["analytics"], item <- entry.storage do %>| <%= item.name %> | <%= item.kind %> | <%= item.purpose %> | <%= item.duration %> |
+<% end %><% end %>
+<% end %>
+
+### 3.3 Funktsionaalsus/eelistused
+
+Need võimaldavad täiendavaid funktsioone ja isikupärastamist, näiteks teie eelistuste ja seadete meeldejätmist.
+
+<%= if @data_collection["preferences"] == [] do %>
+Me ei kasuta praegu selle kategooria küpsiseid ega muid sarnaseid tehnoloogiaid.
+
+> **Mustandi märkus:** ükski selle saidi osa ei ole end selles kategoorias deklareerinud. Kui
+> laadite siin kolmandate isikute tööriistu (analüütika- või reklaamiskripti, manustatud
+> video), loetlege enne avaldamist, mida need salvestavad.
+<% else %>
+<%= if Enum.all?(@data_collection["preferences"], &(&1.storage == [])) do %>
+Selles kategoorias ei salvestata teie seadmesse midagi. See, mida me selle kategooria all kogume, on loetletud punktis 3.5 ja seda töödeldakse meie serverites.
+<% else %>
+| Nimi | Liik | Eesmärk | Kestus |
+|------|------|---------|----------|
+<%= for entry <- @data_collection["preferences"], item <- entry.storage do %>| <%= item.name %> | <%= item.kind %> | <%= item.purpose %> | <%= item.duration %> |
+<% end %><% end %>
+<% end %>
+
+### 3.4 Turundus/sihtimine
+
+Neid kasutatakse reklaami mõõtmiseks ja isikupärastamiseks.
+
+<%= if @data_collection["marketing"] == [] do %>
+Me ei kasuta praegu selle kategooria küpsiseid ega muid sarnaseid tehnoloogiaid.
+
+> **Mustandi märkus:** ükski selle saidi osa ei ole end selles kategoorias deklareerinud. Kui
+> laadite siin kolmandate isikute tööriistu (analüütika- või reklaamiskripti, manustatud
+> video), loetlege enne avaldamist, mida need salvestavad.
+<% else %>
+<%= if Enum.all?(@data_collection["marketing"], &(&1.storage == [])) do %>
+Selles kategoorias ei salvestata teie seadmesse midagi. See, mida me selle kategooria all kogume, on loetletud punktis 3.5 ja seda töödeldakse meie serverites.
+<% else %>
+| Nimi | Liik | Eesmärk | Kestus |
+|------|------|---------|----------|
+<%= for entry <- @data_collection["marketing"], item <- entry.storage do %>| <%= item.name %> | <%= item.kind %> | <%= item.purpose %> | <%= item.duration %> |
+<% end %><% end %>
+<% end %>
+
+### 3.5 Mida me kogume ja miks
+
+<%= for category <- ~w(necessary analytics preferences marketing), entry <- @data_collection[category] do %>
+#### <%= entry.title %>
+
+<%= entry.description %>
+
+<%= if entry.data != [] do %><%= for item <- entry.data do %>- <%= item %>
+<% end %><% end %>
+**Õiguslik alus:** <%= entry.basis %><%= if entry.retention do %>
+
+**Säilitamise aeg:** <%= entry.retention %><% end %>
+<% end %>
+
+## 4. Kuidas küpsiseid hallata
+
+<%= if "gdpr" in @frameworks or "uk_gdpr" in @frameworks do %>
+### Nõusolek küpsiste kasutamiseks (GDPR)
+
+Isikuandmete kaitse üldmääruse (GDPR) kohaselt küsime teie nõusolekut enne mittehädavajalike küpsiste paigaldamist. Meie veebisaiti esimest korda külastades näete küpsiste nõusoleku riba, mille abil saate:
+
+- nõustuda kõigi küpsistega
+- keelduda mittehädavajalikest küpsistest
+- kohandada oma küpsiste eelistusi kategooriate kaupa
+
+Saate oma küpsiste eelistusi igal ajal muuta, klõpsates meie veebisaidi jaluses lingil „Küpsiste seaded“.
+<% end %>
+
+<%= if "ccpa" in @frameworks do %>
+### Loobumisõigus (CCPA)
+
+California elanikel on õigus keelduda küpsistest, mida kasutatakse isikuandmete „müümiseks“. Selle õiguse kasutamiseks külastage palun meie lehte „Ära müü minu isikuandmeid“.
+<% end %>
+
+### Brauseri seaded
+
+Küpsiseid saate kontrollida ja hallata ka oma brauseri seadetes. Enamik brausereid võimaldab:
+
+- vaadata teie seadmesse salvestatud küpsiseid
+- kustutada kõik küpsised või ainult valitud küpsised
+- blokeerida kolmandate isikute küpsised
+- blokeerida kõik küpsised
+- kustutada küpsised brauseri sulgemisel
+
+Pange tähele, et küpsiste blokeerimine või kustutamine võib mõjutada teie kasutuskogemust meie veebisaidil ja piirata teatud funktsioone.
+
+**Brauseripõhised juhised:**
+- [Chrome](https://support.google.com/chrome/answer/95647)
+- [Firefox](https://support.mozilla.org/en-US/kb/cookies-information-websites-store-on-your-computer)
+- [Safari](https://support.apple.com/guide/safari/manage-cookies-sfri11471/mac)
+- [Edge](https://support.microsoft.com/en-us/microsoft-edge/delete-cookies-in-microsoft-edge-63947406-40ac-c3b8-57b9-2a946a29ae09)
+
+## 5. Kolmandate isikute küpsised
+
+Mõned küpsised paigaldavad kolmandate isikute teenused, mis kuvatakse meie lehtedel. Meie ei kontrolli nende küpsiste paigaldamist. Lisateavet nende küpsiste ja nende haldamise kohta leiate vastava kolmanda isiku veebisaidilt.
+
+## 6. Jälgimiskeelu (Do Not Track) signaalid
+
+Mõnel brauseril on jälgimiskeelu („Do Not Track“) funktsioon, mis annab veebisaitidele märku, et te ei soovi, et teie veebitegevust jälgitaks. Meie veebisait <%= if "ccpa" in @frameworks, do: "arvestab", else: "praegu ei arvesta" %> jälgimiskeelu (Do Not Track) signaalidega.
+
+## 7. Põhimõtete muudatused
+
+Võime käesolevaid küpsiste kasutamise põhimõtteid aeg-ajalt ajakohastada, et kajastada muudatusi meie tavades või õiguslikel, tegevuslikel või regulatiivsetel põhjustel. Soovitame teil seda lehte regulaarselt üle vaadata.
+
+## 8. Võtke meiega ühendust
+
+Kui teil on küsimusi selle kohta, kuidas me küpsiseid kasutame, võtke meiega palun ühendust:
+
+**<%= @company_name %>**
+<%= if @dpo_email != "" do %>E-post: <%= @dpo_email %><% end %>

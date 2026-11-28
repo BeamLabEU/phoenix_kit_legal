@@ -60,62 +60,162 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
   """
   @spec render(String.t(), map(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def render(template_name, context, language \\ "en") when is_map(context) do
-    template_path = get_template_path(template_name, language)
+    with {:ok, content, _version} <- render_resolved(resolve(template_name, language), context) do
+      {:ok, content}
+    end
+  end
+
+  @doc false
+  def render_resolved({template_path, locale}, context) do
     # A context built before templates read `@data_collection` (a host
     # calling this directly) still renders: it declares nothing.
     context_with_language =
       context
-      |> Map.put(:language, language)
+      |> Map.put(:language, locale)
       |> put_new_data_collection()
 
-    if File.exists?(template_path) do
-      try do
-        # Convert context map to keyword list for EEx
-        assigns = Enum.map(context_with_language, fn {k, v} -> {to_atom(k), v} end)
-        content = EEx.eval_file(template_path, assigns: assigns)
-        {:ok, content}
-      rescue
-        e in EEx.SyntaxError ->
-          Logger.error("Template syntax error in #{template_name}: #{inspect(e)}")
-          {:error, {:syntax_error, e.message}}
+    case File.read(template_path) do
+      {:ok, bytes} ->
+        try do
+          # Convert context map to keyword list for EEx
+          assigns = Enum.map(context_with_language, fn {k, v} -> {to_atom(k), v} end)
+          content = EEx.eval_string(bytes, [assigns: assigns], file: template_path)
+          {:ok, content, fingerprint(bytes)}
+        rescue
+          e in EEx.SyntaxError ->
+            Logger.error("Template syntax error in #{template_path}: #{inspect(e)}")
+            {:error, {:syntax_error, e.message}}
 
-        e ->
-          Logger.error("Template rendering error in #{template_name}: #{inspect(e)}")
-          {:error, {:render_error, Exception.message(e)}}
-      end
-    else
-      Logger.warning("Template not found: #{template_path}")
-      {:error, :template_not_found}
+          e ->
+            Logger.error("Template rendering error in #{template_path}: #{inspect(e)}")
+            {:error, {:render_error, Exception.message(e)}}
+        end
+
+      {:error, _} ->
+        Logger.warning("Template not found: #{template_path}")
+        {:error, :template_not_found}
     end
   end
 
   @doc """
   Get the full path to a template file, with language-aware lookup.
 
-  For a given language, tries `{name}.{lang}.eex` first, then falls back to `{name}.eex`.
-  Checks parent application first, then falls back to PhoenixKit templates.
+  See `resolve/2` for the order; this returns only the path.
   """
   @spec get_template_path(String.t(), String.t()) :: String.t()
   def get_template_path(template_name, language \\ "en") do
-    lang_template_name = localized_template_name(template_name, language)
+    template_name |> resolve(language) |> elem(0)
+  end
 
-    # Try language-specific template first (parent app, then PhoenixKit)
-    # Fall back to base template (parent app, then PhoenixKit)
-    if language != "en" do
-      get_localized_template_path(lang_template_name, template_name)
-    else
-      get_base_template_path(template_name)
+  @doc """
+  The template file a page in `language` is rendered from, and the locale
+  that file is in: `{path, locale}`.
+
+  The host's own text wins over the bundled one. For `"et-EE"` it tries, in
+  order:
+
+    1. the parent app's `{name}.et-EE.eex`, then its `{name}.et.eex`;
+    2. the parent app's English `{name}.eex`, when the host overrode it — a
+       host that rewrote its English policy and wrote no Estonian one gets
+       its own English text, not the bundled Estonian translation of ours;
+    3. the bundled `{name}.et-EE.eex`, then `{name}.et.eex`;
+    4. the bundled English `{name}.eex`.
+
+  The locale in the answer is the file's (`"en"` after steps 2 and 4). The
+  bundled templates exist in English, Estonian (`et`) and Russian (`ru`).
+  """
+  @spec resolve(String.t(), String.t() | nil) :: {String.t(), String.t()}
+  def resolve(template_name, language),
+    do: resolve(template_name, language, &get_parent_template_path/1)
+
+  @doc false
+  # `parent` looks a file name up in the host app (`{:ok, path} | :error`);
+  # injectable so the order can be tested without a host app.
+  @spec resolve(String.t(), String.t() | nil, (String.t() -> {:ok, String.t()} | :error)) ::
+          {String.t(), String.t()}
+  def resolve(template_name, language, parent) do
+    candidates = language |> locale_candidates() |> Enum.reject(&(&1 == "en"))
+
+    find = fun_lookup(template_name, candidates)
+
+    find.(parent) ||
+      host_english(template_name, parent) ||
+      find.(&get_phoenix_kit_lang_template_path/1) ||
+      {get_phoenix_kit_template_path(template_name), "en"}
+  end
+
+  defp fun_lookup(template_name, candidates) do
+    fn lookup -> Enum.find_value(candidates, &lookup_locale(lookup, template_name, &1)) end
+  end
+
+  defp lookup_locale(lookup, template_name, locale) do
+    case lookup.(localized_template_name(template_name, locale)) do
+      {:ok, path} -> {path, locale}
+      :error -> nil
     end
   end
 
-  defp get_localized_template_path(lang_template_name, base_template_name) do
-    with :error <- get_parent_template_path(lang_template_name),
-         :error <- get_phoenix_kit_lang_template_path(lang_template_name) do
-      get_base_template_path(base_template_name)
-    else
-      {:ok, path} -> path
+  # The host's own English template, if it has one.
+  defp host_english(template_name, parent) do
+    case parent.(template_name) do
+      {:ok, path} -> {path, "en"}
+      :error -> nil
     end
   end
+
+  @doc """
+  The locale a page in `language` would actually be written in (see
+  `resolve/2`) — `"en"` when no template exists for the language.
+  """
+  @spec resolved_locale(String.t(), String.t() | nil) :: String.t()
+  def resolved_locale(template_name, language),
+    do: template_name |> resolve(language) |> elem(1)
+
+  @doc """
+  A short fingerprint of the template a page in `language` is rendered from
+  (`"sha256:<12 hex>"` of the resolved file's bytes), or `nil` when the file
+  cannot be read. It changes whenever the template text does — a new
+  package release or a host override — so a record of "which text was
+  accepted" can name it.
+  """
+  @spec template_version(String.t(), String.t() | nil) :: String.t() | nil
+  def template_version(template_name, language) do
+    {path, _locale} = resolve(template_name, language)
+
+    case File.read(path) do
+      {:ok, bytes} ->
+        fingerprint(bytes)
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  defp fingerprint(bytes) do
+    hex = :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
+    "sha256:" <> binary_part(hex, 0, 12)
+  end
+
+  # "et-EE" → ["et-EE", "et"]; "ru" → ["ru"]; junk or nil → [].
+  defp locale_candidates(language) when is_binary(language) do
+    language = String.trim(language)
+
+    if language =~ ~r/^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$/ do
+      [first | subtags] = String.split(language, ["-", "_"])
+      base = String.downcase(first)
+      exact = base <> String.slice(language, byte_size(first)..-1//1)
+      canonical = Enum.join([base | Enum.map(subtags, &canonical_subtag/1)], "-")
+      Enum.uniq([exact, canonical, String.replace(canonical, "-", "_"), base])
+    else
+      []
+    end
+  end
+
+  defp locale_candidates(_), do: []
+
+  defp canonical_subtag(subtag) when byte_size(subtag) == 2, do: String.upcase(subtag)
+  defp canonical_subtag(subtag) when byte_size(subtag) == 4, do: String.capitalize(subtag)
+  defp canonical_subtag(subtag), do: String.downcase(subtag)
 
   @doc """
   List all available templates.
@@ -147,13 +247,6 @@ defmodule PhoenixKit.Modules.Legal.TemplateGenerator do
     # "privacy_policy.eex" + "de" -> "privacy_policy.de.eex"
     base = Path.rootname(template_name)
     "#{base}.#{language}.eex"
-  end
-
-  defp get_base_template_path(template_name) do
-    case get_parent_template_path(template_name) do
-      {:ok, path} -> path
-      :error -> get_phoenix_kit_template_path(template_name)
-    end
   end
 
   defp get_phoenix_kit_lang_template_path(template_name) do

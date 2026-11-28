@@ -514,4 +514,26 @@ defmodule PhoenixKit.Modules.Legal.Web.ConsentControllerTest do
       assert conn.status == 403
     end
   end
+
+  describe "request_locale/2 (the language recorded with a decision)" do
+    defp locale_of(params, headers) do
+      conn = Enum.reduce(headers, conn(:post, "/"), fn {k, v}, c -> put_req_header(c, k, v) end)
+      ConsentController.request_locale(conn, params)
+    end
+
+    test "the banner's <html lang> wins over Accept-Language" do
+      assert locale_of(%{"locale" => "et"}, [{"accept-language", "ru-RU,ru;q=0.9"}]) == "et"
+    end
+
+    test "without it, the first Accept-Language tag" do
+      assert locale_of(%{}, [{"accept-language", "ru-RU,ru;q=0.9,en;q=0.8"}]) == "ru-RU"
+      assert locale_of(%{"locale" => nil}, [{"accept-language", "de;q=0.9"}]) == "de"
+    end
+
+    test "junk in either place records nil, never the junk" do
+      assert locale_of(%{"locale" => "<script>"}, []) == nil
+      assert locale_of(%{"locale" => %{"a" => 1}}, [{"accept-language", "*"}]) == nil
+      assert locale_of(%{}, []) == nil
+    end
+  end
 end

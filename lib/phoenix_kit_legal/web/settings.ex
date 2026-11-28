@@ -5,7 +5,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   Route: {prefix}/admin/settings/legal
 
   Sections:
-  1. Module enable/disable (with optional Publishing dependency check)
+  1. Module enable/disable (with the Publishing dependency check)
   2. Compliance framework selection
   3. Company information form
   4. DPO contact form
@@ -15,16 +15,10 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   use PhoenixKitWeb, :live_view
   use Gettext, backend: PhoenixKit.Modules.Legal.Gettext
 
-  @compile {:no_warn_undefined,
-            [
-              {PhoenixKit.Modules.Publishing, :enabled?, 0},
-              {PhoenixKit.Modules.Publishing, :enabled_language_codes, 0},
-              {PhoenixKit.Modules.Publishing, :get_primary_language, 0}
-            ]}
-
   alias PhoenixKit.Modules.Legal
   alias PhoenixKit.Modules.Legal.Consent
   alias PhoenixKit.Modules.Legal.DataCollection
+  alias PhoenixKit.Modules.Legal.PageStore
   alias PhoenixKit.Settings
   alias PhoenixKit.Utils.Routes
 
@@ -54,6 +48,7 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
         Routes.path("/admin/settings/legal", locale: socket.assigns[:current_locale_base])
       )
       |> assign(:publishing_enabled, config.publishing_enabled)
+      |> assign(:publishing_installed, config.publishing_installed)
       |> assign(:legal_enabled, config.enabled)
       |> assign(:available_frameworks, Legal.available_frameworks())
       |> assign(:available_page_types, Legal.available_page_types())
@@ -444,9 +439,9 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   end
 
   defp publishing_module_languages do
-    mod = PhoenixKit.Modules.Publishing
+    mod = PageStore.adapter()
 
-    if Code.ensure_loaded?(mod) and function_exported?(mod, :enabled?, 0) and mod.enabled?() do
+    if mod.enabled?() do
       mod.enabled_language_codes()
     else
       ["en"]
@@ -456,9 +451,9 @@ defmodule PhoenixKitWeb.Live.Modules.Legal.Settings do
   end
 
   defp default_language do
-    mod = PhoenixKit.Modules.Publishing
+    mod = PageStore.adapter()
 
-    if Code.ensure_loaded?(mod) and function_exported?(mod, :enabled?, 0) and mod.enabled?() do
+    if mod.enabled?() do
       mod.get_primary_language()
     else
       "en"
